@@ -36,7 +36,7 @@ impl Hub {
         self.conns.remove(id);
     }
 
-    pub fn publish(&self, payload: Arc<Bytes>) {
+    pub fn broadcast(&self, payload: Arc<Bytes>) {
         for entry in self.conns.iter() {
             let _ = entry.data.try_send(payload.clone());
         }
