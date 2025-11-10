@@ -153,11 +153,7 @@ async fn sequencer(
     }
 }
 
-async fn matcher(
-    hub: Arc<Hub>,
-    pool: Arc<rayon::ThreadPool>,
-    mut rx: mpsc::Receiver<Bytes>,
-) {
+async fn matcher(hub: Arc<Hub>, pool: Arc<rayon::ThreadPool>, mut rx: mpsc::Receiver<Bytes>) {
     while let Some(x) = rx.recv().await {
         println!(
             "MAT RECEIVED {:?}, tid: {:?}",
@@ -167,7 +163,8 @@ async fn matcher(
         let s = rayon_await(pool.clone(), || {
             // TODO: fill with matching task
             (0u64..50_000_000).into_iter().sum::<u64>()
-        }).await;
+        })
+        .await;
         println!("done {:?}", s);
     }
 }
@@ -182,7 +179,6 @@ async fn rayon_await<T: Send + 'static>(
     });
     rx.await.expect("rayon task panicked or pool dropped")
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
