@@ -2,11 +2,12 @@ use anyhow::Result;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
+use rayon::ThreadPoolBuilder;
 use serde_json;
 use std::{env, io::Error as IoError, net::SocketAddr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::mpsc,
+    sync::{mpsc, oneshot},
 };
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
@@ -152,23 +153,36 @@ async fn sequencer(
     }
 }
 
-async fn matcher(hub: Arc<Hub>, mut rx: mpsc::Receiver<Bytes>) {
+async fn matcher(
+    hub: Arc<Hub>,
+    pool: Arc<rayon::ThreadPool>,
+    mut rx: mpsc::Receiver<Bytes>,
+) {
     while let Some(x) = rx.recv().await {
         println!(
             "MAT RECEIVED {:?}, tid: {:?}",
             x,
             std::thread::current().id()
         );
-        tokio::task::spawn_blocking(move || {
-            println!("spawn tid {:?}", std::thread::current().id());
-            let mut s: i64 = 0_64;
-            for i in 0..10000000 {
-                s += i;
-            }
-            println!("done computing {:?}", s);
-        });
+        let s = rayon_await(pool.clone(), || {
+            // TODO: fill with matching task
+            (0u64..50_000_000).into_iter().sum::<u64>()
+        }).await;
+        println!("done {:?}", s);
     }
 }
+
+async fn rayon_await<T: Send + 'static>(
+    pool: Arc<rayon::ThreadPool>,
+    f: impl FnOnce() -> T + Send + 'static,
+) -> T {
+    let (tx, rx) = oneshot::channel();
+    pool.spawn(move || {
+        let _ = tx.send(f());
+    });
+    rx.await.expect("rayon task panicked or pool dropped")
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
@@ -184,9 +198,17 @@ async fn main() -> Result<(), IoError> {
     let (seq_tx, seq_rx) = mpsc::channel::<Bytes>(1024);
     let (mat_tx, mat_rx) = mpsc::channel::<Bytes>(1024);
 
+    let pool = Arc::new(
+        ThreadPoolBuilder::new()
+            .num_threads(num_cpus::get_physical())
+            .thread_name(|i| format!("thread-{}", i))
+            .build()
+            .unwrap(),
+    );
+
     // spawn sequencer task
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(hub.clone(), mat_rx));
+    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx));
 
     let proc: Arc<Processor> = Arc::new(Processor {
         hub: hub.clone(),
