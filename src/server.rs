@@ -2,10 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use rayon::{
-    ThreadPoolBuilder,
-    prelude::*,
-};
+use rayon::{prelude::*, ThreadPoolBuilder};
 use serde_json;
 use std::{env, io::Error as IoError, net::SocketAddr, sync::Arc};
 use tokio::{
@@ -164,9 +161,9 @@ pub struct Order {
 
 pub struct Book {
     id: usize,
-    q: usize, // quantity
+    q: usize,        // quantity
     bid: Vec<Order>, // sorted desc
-    ask: Vec<Order>, // sorted asc 
+    ask: Vec<Order>, // sorted asc
 }
 
 impl Book {
@@ -180,7 +177,9 @@ impl Book {
     }
 
     fn buy_nowait(&mut self, req_sz: usize) -> Option<Order> {
-        if req_sz >= self.q { return None; }
+        if req_sz >= self.q {
+            return None;
+        }
 
         let mut c: usize = 0;
         let mut x: f32 = 0_f32;
@@ -192,14 +191,14 @@ impl Book {
             i += 1;
             if t >= req_sz {
                 let diff: usize = t - req_sz;
-                x += ord.price * (diff as f32); 
+                x += ord.price * (diff as f32);
                 c += diff;
-                ord.quantity -= diff; 
+                ord.quantity -= diff;
                 break;
             } else {
                 x += ord.price * (ord.quantity as f32);
                 c += ord.quantity;
-            } 
+            }
         }
 
         if c < req_sz {
@@ -208,13 +207,15 @@ impl Book {
 
         // otherwise order was successful
         self.ask.drain(i..);
-        Some(Order { quantity: c, price: x/(c as f32) }) 
-    } 
+        Some(Order {
+            quantity: c,
+            price: x / (c as f32),
+        })
+    }
 
     fn sell_wait(&mut self, order: Order) {
         binary_insert_by_key(&mut self.ask, order, |o| o.price);
     }
-    
 }
 
 async fn matcher(hub: Arc<Hub>, pool: Arc<rayon::ThreadPool>, mut rx: mpsc::Receiver<Bytes>) {
@@ -246,7 +247,6 @@ async fn rayon_await<T: Send + 'static>(
     rx.await.expect("rayon task panicked or pool dropped")
 }
 
-
 pub fn binary_insert_by_key<T, K: PartialOrd, F>(v: &mut Vec<T>, item: T, mut key: F)
 where
     F: FnMut(&T) -> K,
@@ -261,7 +261,6 @@ where
     };
     v.insert(pos, item);
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
