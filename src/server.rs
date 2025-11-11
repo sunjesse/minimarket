@@ -1,23 +1,19 @@
 use anyhow::Result;
 use bytes::Bytes;
-use rayon::{prelude::*, ThreadPoolBuilder};
-use serde_json;
+use rayon::ThreadPoolBuilder;
 use std::{
     env,
     io::Error as IoError,
     sync::{Arc, Mutex},
 };
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::mpsc,
-};
+use tokio::{net::TcpListener, sync::mpsc};
 use uuid::Uuid;
 
 use minimarket::order::OrderType;
 use minimarket::*;
 
 async fn sequencer(
-    hub: Arc<Hub>,
+    _hub: Arc<Hub>,
     mut rx: mpsc::Receiver<Bytes>,
     tx: mpsc::Sender<Bytes>, // -> matcher
 ) {
@@ -34,7 +30,7 @@ async fn sequencer(
 }
 
 async fn matcher(
-    hub: Arc<Hub>,
+    _hub: Arc<Hub>,
     pool: Arc<rayon::ThreadPool>,
     mut rx: mpsc::Receiver<Bytes>,
     book: Arc<Mutex<Book>>,

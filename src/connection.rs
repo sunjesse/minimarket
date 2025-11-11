@@ -2,13 +2,8 @@ use anyhow::Result;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use rayon::prelude::*;
-use serde_json;
-use std::{env, io::Error as IoError, net::SocketAddr, sync::Arc};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::mpsc,
-};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
