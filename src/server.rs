@@ -9,7 +9,7 @@ use std::{
 use tokio::{net::TcpListener, sync::mpsc};
 use uuid::Uuid;
 
-use minimarket::order::OrderType;
+use minimarket::order::{bytes_to_order, OrderType};
 use minimarket::*;
 
 async fn sequencer(
@@ -44,8 +44,15 @@ async fn matcher(
         let book_arc = Arc::clone(&book);
         let s = rayon_await(pool.clone(), move || {
             // TODO: fill with matching task
+            let ord: Order = bytes_to_order(&x);
+            let mut b = book_arc.lock().unwrap();
             println!("tid rayon: {:?}", std::thread::current().id());
-            book_arc.lock().unwrap().buy_nowait(300)
+            match ord.kind {
+                Some(OrderType::MarketBuy) => b.buy_nowait(ord.quantity),
+                Some(OrderType::MarketSell) => b.sell_nowait(ord.quantity),
+                Some(OrderType::LimitSell) | Some(OrderType::LimitBuy) => todo!(),
+                None => None,
+            }
         })
         .await;
         println!("done {:?}", s);

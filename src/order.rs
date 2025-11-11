@@ -22,3 +22,7 @@ pub fn order_to_bytes(order: &Order) -> Bytes {
     let v = bincode::serialize(order).expect("serialize");
     Bytes::from(v)
 }
+
+pub fn bytes_to_order(bytes: &Bytes) -> Order {
+    bincode::deserialize::<Order>(bytes).expect("deserialize")
+}
