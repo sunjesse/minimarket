@@ -14,12 +14,13 @@ use uuid::Uuid;
 
 use crate::{order_to_bytes, Order};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Conn {
     pub ctrl: mpsc::Sender<Message>,
     pub data: mpsc::Sender<Arc<Bytes>>,
 }
 
+#[derive(Debug)]
 pub struct Hub {
     conns: DashMap<Uuid, Conn>,
 }

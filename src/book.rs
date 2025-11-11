@@ -6,6 +6,7 @@ use crate::connection::Hub;
 use crate::order::{Order, OrderType};
 use crate::utils::binary_insert_by_key;
 
+#[derive(Debug)]
 pub struct Book {
     id: usize,
     _q: usize,       // quantity
@@ -73,6 +74,10 @@ impl Book {
         let mut _clients: Vec<Order> = Vec::new();
 
         for ord in v.iter_mut() {
+            // TODO: Fix this spaghetti
+            if c == req_sz {
+                break;
+            }
             let t: usize = ord.quantity + c;
             i += 1;
             if t >= req_sz {
@@ -86,7 +91,6 @@ impl Book {
                     price: ord.price,
                     kind: None,
                 });
-                break;
             } else {
                 x += ord.price * (ord.quantity as f32);
                 c += ord.quantity;
@@ -99,12 +103,14 @@ impl Book {
             }
         }
 
+        println!("c {:?} req {:?}", c, req_sz);
         if c < req_sz {
             return None;
         }
 
         // otherwise order was successful
-        v.drain(i..);
+        v.drain(..i);
+        println!("drained {:?}", v);
         if kind == OrderType::MarketBuy {
             self._q -= req_sz;
         } else if kind == OrderType::MarketSell {
