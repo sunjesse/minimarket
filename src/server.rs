@@ -2,7 +2,10 @@ use anyhow::Result;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use rayon::ThreadPoolBuilder;
+use rayon::{
+    ThreadPoolBuilder,
+    prelude::*,
+};
 use serde_json;
 use std::{env, io::Error as IoError, net::SocketAddr, sync::Arc};
 use tokio::{
@@ -153,6 +156,67 @@ async fn sequencer(
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct Order {
+    quantity: usize,
+    price: f32,
+}
+
+pub struct Book {
+    id: usize,
+    q: usize, // quantity
+    bid: Vec<Order>, // sorted desc
+    ask: Vec<Order>, // sorted asc 
+}
+
+impl Book {
+    fn new(id: usize, quantity: usize) -> Self {
+        Book {
+            id: id,
+            q: quantity,
+            bid: Vec::new(),
+            ask: Vec::new(),
+        }
+    }
+
+    fn buy_nowait(&mut self, req_sz: usize) -> Option<Order> {
+        if req_sz >= self.q { return None; }
+
+        let mut c: usize = 0;
+        let mut x: f32 = 0_f32;
+        let mut i: usize = 0;
+
+        for ord in self.ask.iter_mut() {
+            // TODO: cleanup this implementation, not the cleanest
+            let t: usize = ord.quantity + c;
+            i += 1;
+            if t >= req_sz {
+                let diff: usize = t - req_sz;
+                x += ord.price * (diff as f32); 
+                c += diff;
+                ord.quantity -= diff; 
+                break;
+            } else {
+                x += ord.price * (ord.quantity as f32);
+                c += ord.quantity;
+            } 
+        }
+
+        if c < req_sz {
+            return None;
+        }
+
+        // otherwise order was successful
+        self.ask.drain(i..);
+        Some(Order { quantity: c, price: x/(c as f32) }) 
+    } 
+
+    fn sell_wait(&mut self, order: Order) {
+        binary_insert_by_key(&mut self.ask, order, |o| o.price);
+    }
+    
+}
+
 async fn matcher(hub: Arc<Hub>, pool: Arc<rayon::ThreadPool>, mut rx: mpsc::Receiver<Bytes>) {
     while let Some(x) = rx.recv().await {
         println!(
@@ -162,13 +226,15 @@ async fn matcher(hub: Arc<Hub>, pool: Arc<rayon::ThreadPool>, mut rx: mpsc::Rece
         );
         let s = rayon_await(pool.clone(), || {
             // TODO: fill with matching task
-            (0u64..50_000_000).into_iter().sum::<u64>()
+            println!("tid rayon: {:?}", std::thread::current().id());
+            (0u64..50_000_000).into_par_iter().sum::<u64>()
         })
         .await;
         println!("done {:?}", s);
     }
 }
 
+// HELPERS
 async fn rayon_await<T: Send + 'static>(
     pool: Arc<rayon::ThreadPool>,
     f: impl FnOnce() -> T + Send + 'static,
@@ -179,6 +245,23 @@ async fn rayon_await<T: Send + 'static>(
     });
     rx.await.expect("rayon task panicked or pool dropped")
 }
+
+
+pub fn binary_insert_by_key<T, K: PartialOrd, F>(v: &mut Vec<T>, item: T, mut key: F)
+where
+    F: FnMut(&T) -> K,
+{
+    let item_key = key(&item);
+    let pos = match v.binary_search_by(|x| {
+        key(x)
+            .partial_cmp(&item_key)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    }) {
+        Ok(i) | Err(i) => i,
+    };
+    v.insert(pos, item);
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
