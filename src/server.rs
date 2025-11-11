@@ -170,7 +170,7 @@ pub struct Book {
 
 impl Book {
     // TODO: none of this is thread-safe,
-    // figure out if that is needed and if so add. 
+    // wrap all in mutex?
     fn new(id: usize, quantity: usize) -> Self {
         Book {
             id: id,
@@ -211,6 +211,7 @@ impl Book {
 
         // otherwise order was successful
         self.ask.drain(i..);
+        self.q -= req_sz;
         Some(Order {
             quantity: c,
             price: x / (c as f32),
