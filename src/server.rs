@@ -56,6 +56,13 @@ async fn matcher(
     }
 }
 
+async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Vec<Order>>) {
+    while let Some(x) = rx.recv().await {
+        println!("broadcasting {:?}", x);
+        hub.broadcast_to(x);
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), IoError> {
     let addr: String = env::args()
@@ -69,6 +76,7 @@ async fn main() -> Result<(), IoError> {
 
     let (seq_tx, seq_rx) = mpsc::channel::<Bytes>(1024);
     let (mat_tx, mat_rx) = mpsc::channel::<Bytes>(1024);
+    let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
 
     let pool = Arc::new(
         ThreadPoolBuilder::new()
@@ -79,7 +87,7 @@ async fn main() -> Result<(), IoError> {
     );
 
     // book keeping
-    let book = Arc::new(Mutex::new(Book::new(0, 0, hub.clone())));
+    let book = Arc::new(Mutex::new(Book::new(0, 0, hub.clone(), bc_tx)));
 
     {
         let mut l = book.lock().unwrap();
@@ -109,6 +117,7 @@ async fn main() -> Result<(), IoError> {
     // spawn sequencer task
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, book.clone()));
+    tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
     let proc: Arc<Processor> = Arc::new(Processor::new(hub.clone(), seq_tx));
 

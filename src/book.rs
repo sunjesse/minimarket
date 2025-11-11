@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::connection::Hub;
@@ -13,18 +14,25 @@ pub struct Book {
     bid: Vec<Order>, // sorted desc
     ask: Vec<Order>, // sorted asc
     hub: Arc<Hub>,
+    sig_tx: mpsc::Sender<Vec<Order>>,
 }
 
 impl Book {
     // TODO: none of this is thread-safe,
     // wrap all in mutex?
-    pub fn new(id: usize, quantity: usize, hub: Arc<Hub>) -> Self {
+    pub fn new(
+        id: usize,
+        quantity: usize,
+        hub: Arc<Hub>,
+        sig_tx: mpsc::Sender<Vec<Order>>,
+    ) -> Self {
         Self {
             id: id,
             _q: quantity,
             bid: Vec::new(),
             ask: Vec::new(),
             hub: hub,
+            sig_tx: sig_tx,
         }
     }
 
@@ -98,22 +106,20 @@ impl Book {
             }
         }
 
-        println!("c {:?} req {:?}", c, req_sz);
         if c > 0 {
             return None;
         }
 
         // otherwise order was successful
         v.drain(..i);
-        println!("drained {:?}", v);
         if kind == OrderType::MarketBuy {
             self._q -= req_sz;
         } else if kind == OrderType::MarketSell {
             self._q += req_sz;
         }
 
-        // signal to clients; TODO: we should offload this to a separate thread.
-        self.hub.broadcast_to(_clients);
+        // signal to clients;
+        let _ = self.sig_tx.try_send(_clients);
 
         Some(Order {
             id: Uuid::new_v4(), // TODO: filler right now, get actual connection id
