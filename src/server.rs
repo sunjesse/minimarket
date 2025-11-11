@@ -17,7 +17,7 @@ async fn sequencer(
     mut rx: mpsc::Receiver<Bytes>,
     tx: mpsc::Sender<Bytes>, // -> matcher
 ) {
-    // TODO: make sequencer actually do something equal,
+    // TODO: make sequencer actually do something useful,
     // that is, giving strong ordering to the reqs coming in.
     while let Some(x) = rx.recv().await {
         println!(
