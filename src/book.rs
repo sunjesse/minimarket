@@ -67,44 +67,39 @@ impl Book {
             panic!("unexpected order type");
         };
 
-        let mut c: usize = 0;
+        let mut c: usize = req_sz;
         let mut x: f32 = 0_f32;
         let mut i: usize = 0;
 
         let mut _clients: Vec<Order> = Vec::new();
 
-        for ord in v.iter_mut() {
-            // TODO: Fix this spaghetti
-            if c == req_sz {
-                break;
-            }
-            let t: usize = ord.quantity + c;
-            i += 1;
-            if t >= req_sz {
-                let diff: usize = req_sz - c;
-                x += ord.price * (diff as f32);
-                c += diff;
-                ord.quantity -= diff;
+        while c > 0 && i < v.len() {
+            if v[i].quantity <= c {
+                c -= v[i].quantity;
+                x += v[i].price * (v[i].quantity as f32);
+                v[i].quantity = 0;
+                i += 1;
                 _clients.push(Order {
-                    id: ord.id,
-                    quantity: diff,
-                    price: ord.price,
+                    id: v[i].id,
+                    quantity: v[i].quantity,
+                    price: v[i].price,
                     kind: None,
                 });
             } else {
-                x += ord.price * (ord.quantity as f32);
-                c += ord.quantity;
+                x += v[i].price * (c as f32);
+                v[i].quantity -= c;
+                c = 0;
                 _clients.push(Order {
-                    id: ord.id,
-                    quantity: ord.quantity,
-                    price: ord.price,
+                    id: v[i].id,
+                    quantity: c,
+                    price: v[i].price,
                     kind: None,
                 });
             }
         }
 
         println!("c {:?} req {:?}", c, req_sz);
-        if c < req_sz {
+        if c > 0 {
             return None;
         }
 
@@ -122,8 +117,8 @@ impl Book {
 
         Some(Order {
             id: Uuid::new_v4(), // TODO: filler right now, get actual connection id
-            quantity: c,
-            price: x / (c as f32),
+            quantity: req_sz,
+            price: x / (req_sz as f32),
             kind: Some(kind),
         })
     }
