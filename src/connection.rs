@@ -12,7 +12,7 @@ use tokio::{
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::order::{order_to_bytes, Order};
+use crate::{order_to_bytes, Order};
 
 #[derive(Clone)]
 pub struct Conn {
