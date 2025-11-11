@@ -36,23 +36,23 @@ impl Book {
         }
     }
 
-    pub fn buy_nowait(&mut self, req_sz: usize) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketBuy, req_sz)
+    pub fn buy_nowait(&mut self, order: Order) -> Option<Order> {
+        self.consume_nowait(OrderType::MarketBuy, order.quantity)
     }
 
-    pub fn sell_wait(&mut self, order: Order) {
+    pub fn sell_wait(&mut self, order: Order) -> Option<Order> {
         binary_insert_by_key(&mut self.ask, order, |o| o.price, false);
         self._q += order.quantity;
+        None
     }
 
-    pub fn sell_nowait(&mut self, req_sz: usize) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketSell, req_sz)
+    pub fn sell_nowait(&mut self, order: Order) -> Option<Order> {
+        self.consume_nowait(OrderType::MarketSell, order.quantity)
     }
 
-    pub fn buy_wait(&mut self, order: Order) {
-        // TODO: double check this logic, doesn't feel right lol
-        binary_insert_by_key(&mut self.ask, order, |o| o.price, true);
-        //self._q -= order.quantity;
+    pub fn buy_wait(&mut self, order: Order) -> Option<Order> {
+        binary_insert_by_key(&mut self.bid, order, |o| o.price, true);
+        None
     }
 
     pub fn spread(self) -> Option<(f32, f32)> {

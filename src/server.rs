@@ -36,21 +36,17 @@ async fn matcher(
     book: Arc<Mutex<Book>>,
 ) {
     while let Some(x) = rx.recv().await {
-        println!(
-            "MAT RECEIVED {:?}, tid: {:?}",
-            x,
-            std::thread::current().id()
-        );
         let book_arc = Arc::clone(&book);
         let s = rayon_await(pool.clone(), move || {
             // TODO: fill with matching task
             let ord: Order = bytes_to_order(&x);
             let mut b = book_arc.lock().unwrap();
-            println!("tid rayon: {:?}", std::thread::current().id());
+            println!("ORDER IS {:?}", ord);
             match ord.kind {
-                Some(OrderType::MarketBuy) => b.buy_nowait(ord.quantity),
-                Some(OrderType::MarketSell) => b.sell_nowait(ord.quantity),
-                Some(OrderType::LimitSell) | Some(OrderType::LimitBuy) => todo!(),
+                Some(OrderType::MarketBuy) => b.buy_nowait(ord),
+                Some(OrderType::MarketSell) => b.sell_nowait(ord),
+                Some(OrderType::LimitSell) => b.sell_wait(ord),
+                Some(OrderType::LimitBuy) => b.buy_wait(ord),
                 None => None,
             }
         })
@@ -61,7 +57,6 @@ async fn matcher(
 
 async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Arc<Vec<Order>>>) {
     while let Some(x) = rx.recv().await {
-        println!("broadcasting {:?}", x);
         hub.broadcast_to(x.clone());
     }
 }
@@ -114,10 +109,8 @@ async fn main() -> Result<(), IoError> {
             price: 100_f32,
             kind: Some(OrderType::LimitBuy),
         });
-        println!("{:?}", l);
     }
 
-    // spawn sequencer task
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, book.clone()));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use minimarket::{order_to_bytes, Order, OrderType};
 
 fn parse_order(input: &str) -> Option<Order> {
-    let input = input.trim().to_lowercase();
+    let input = input.trim();
 
     // expect like "b100@250" or "s50@120"
     if input.len() < 4 {
@@ -28,6 +28,8 @@ fn parse_order(input: &str) -> Option<Order> {
     let kind = match side {
         "b" => Some(OrderType::MarketBuy),
         "s" => Some(OrderType::MarketSell),
+        "B" => Some(OrderType::LimitBuy),
+        "S" => Some(OrderType::LimitSell),
         _ => None,
     };
 
