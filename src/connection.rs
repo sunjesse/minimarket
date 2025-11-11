@@ -12,6 +12,8 @@ use tokio::{
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
+use crate::order::{order_to_bytes, Order};
+
 #[derive(Clone)]
 pub struct Conn {
     pub ctrl: mpsc::Sender<Message>,
@@ -38,8 +40,16 @@ impl Hub {
     }
 
     pub fn broadcast(&self, payload: Arc<Bytes>) {
-        for entry in self.conns.iter() {
-            let _ = entry.data.try_send(payload.clone());
+        for conn in self.conns.iter() {
+            let _ = conn.data.try_send(payload.clone());
+        }
+    }
+
+    pub fn broadcast_to(&self, clients: Vec<Order>) {
+        for c in clients.iter() {
+            if let Some(conn) = self.conns.get(&c.id) {
+                let _ = conn.data.try_send(order_to_bytes(c).into());
+            }
         }
     }
 

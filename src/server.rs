@@ -12,10 +12,13 @@ mod utils;
 use utils::{binary_insert_by_key, rayon_await};
 
 mod matcher;
-use matcher::{Book, Order};
+use matcher::Book;
 
 mod connection;
 use connection::{new_connection, Hub, Processor};
+
+mod order;
+use order::Order;
 
 async fn sequencer(
     hub: Arc<Hub>,
