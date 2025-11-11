@@ -8,17 +8,17 @@ use tokio::{
     sync::mpsc,
 };
 
-mod utils;
-use utils::{binary_insert_by_key, rayon_await};
-
-mod matcher;
-use matcher::Book;
-
+mod book;
 mod connection;
-use connection::{new_connection, Hub, Processor};
-
 mod order;
-use order::Order;
+mod utils;
+
+use crate::{
+    book::Book,
+    connection::{new_connection, Hub, Processor},
+    order::Order,
+    utils::{binary_insert_by_key, rayon_await},
+};
 
 async fn sequencer(
     hub: Arc<Hub>,

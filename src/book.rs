@@ -1,3 +1,4 @@
+use dashmap::DashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -17,7 +18,7 @@ impl Book {
     // TODO: none of this is thread-safe,
     // wrap all in mutex?
     fn new(id: usize, quantity: usize, hub: Arc<Hub>) -> Self {
-        Book {
+        Self {
             id: id,
             _q: quantity,
             bid: Vec::new(),
@@ -87,5 +88,17 @@ impl Book {
     fn sell_wait(&mut self, order: Order) {
         binary_insert_by_key(&mut self.ask, order, |o| o.price);
         self._q += order.quantity;
+    }
+}
+
+pub struct Exchange {
+    books: Arc<DashMap<String, Book>>,
+}
+
+impl Exchange {
+    pub fn new() -> Self {
+        Self {
+            books: Arc::new(DashMap::new()),
+        }
     }
 }
