@@ -155,6 +155,8 @@ async fn sequencer(
 
 #[derive(Copy, Clone)]
 pub struct Order {
+    // TODO: keep track of which client ordered it, so we can
+    // send notifications back
     quantity: usize,
     price: f32,
 }
