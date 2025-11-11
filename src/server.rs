@@ -169,6 +169,8 @@ pub struct Book {
 }
 
 impl Book {
+    // TODO: none of this is thread-safe,
+    // figure out if that is needed and if so add. 
     fn new(id: usize, quantity: usize) -> Self {
         Book {
             id: id,
