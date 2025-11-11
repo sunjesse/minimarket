@@ -37,7 +37,7 @@ impl Book {
     }
 
     pub fn buy_nowait(&mut self, order: Order) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketBuy, order.quantity)
+        self.consume_nowait(OrderType::MarketBuy, order)
     }
 
     pub fn sell_wait(&mut self, order: Order) -> Option<Order> {
@@ -47,7 +47,7 @@ impl Book {
     }
 
     pub fn sell_nowait(&mut self, order: Order) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketSell, order.quantity)
+        self.consume_nowait(OrderType::MarketSell, order)
     }
 
     pub fn buy_wait(&mut self, order: Order) -> Option<Order> {
@@ -62,7 +62,8 @@ impl Book {
         Some((self.bid[0].price, self.ask[0].price))
     }
 
-    fn consume_nowait(&mut self, kind: OrderType, req_sz: usize) -> Option<Order> {
+    fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
+        let req_sz: usize = order.quantity;
         if req_sz >= self._q {
             return None;
         }
@@ -122,7 +123,7 @@ impl Book {
         let _ = self.sig_tx.try_send(Arc::new(_clients));
 
         Some(Order {
-            id: Uuid::new_v4(), // TODO: filler right now, get actual connection id
+            id: order.id,
             quantity: req_sz,
             price: x / (req_sz as f32),
             kind: Some(kind),

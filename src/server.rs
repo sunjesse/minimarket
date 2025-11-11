@@ -17,6 +17,8 @@ async fn sequencer(
     mut rx: mpsc::Receiver<Bytes>,
     tx: mpsc::Sender<Bytes>, // -> matcher
 ) {
+    // TODO: make sequencer actually do something equal,
+    // that is, giving strong ordering to the reqs coming in.
     while let Some(x) = rx.recv().await {
         println!(
             "seq has received {:?}, tid: {:?}",
@@ -86,30 +88,6 @@ async fn main() -> Result<(), IoError> {
 
     // book keeping
     let book = Arc::new(Mutex::new(Book::new(0, 0, hub.clone(), bc_tx)));
-
-    {
-        let mut l = book.lock().unwrap();
-        l.sell_wait(Order {
-            id: Uuid::new_v4(),
-            quantity: 1000,
-            price: 103_f32,
-            kind: Some(OrderType::LimitSell),
-        });
-
-        l.sell_wait(Order {
-            id: Uuid::new_v4(),
-            quantity: 1000,
-            price: 205_f32,
-            kind: Some(OrderType::LimitSell),
-        });
-
-        l.buy_wait(Order {
-            id: Uuid::new_v4(),
-            quantity: 150,
-            price: 100_f32,
-            kind: Some(OrderType::LimitBuy),
-        });
-    }
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, book.clone()));
