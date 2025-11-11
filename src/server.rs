@@ -2,12 +2,18 @@ use anyhow::Result;
 use bytes::Bytes;
 use rayon::{prelude::*, ThreadPoolBuilder};
 use serde_json;
-use std::{env, io::Error as IoError, sync::Arc};
+use std::{
+    env,
+    io::Error as IoError,
+    sync::{Arc, Mutex},
+};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc,
 };
+use uuid::Uuid;
 
+use minimarket::order::OrderType;
 use minimarket::*;
 
 async fn sequencer(
@@ -27,17 +33,23 @@ async fn sequencer(
     }
 }
 
-async fn matcher(hub: Arc<Hub>, pool: Arc<rayon::ThreadPool>, mut rx: mpsc::Receiver<Bytes>) {
+async fn matcher(
+    hub: Arc<Hub>,
+    pool: Arc<rayon::ThreadPool>,
+    mut rx: mpsc::Receiver<Bytes>,
+    book: Arc<Mutex<Book>>,
+) {
     while let Some(x) = rx.recv().await {
         println!(
             "MAT RECEIVED {:?}, tid: {:?}",
             x,
             std::thread::current().id()
         );
-        let s = rayon_await(pool.clone(), || {
+        let book_arc = Arc::clone(&book);
+        let s = rayon_await(pool.clone(), move || {
             // TODO: fill with matching task
             println!("tid rayon: {:?}", std::thread::current().id());
-            (0u64..50_000_000).into_par_iter().sum::<u64>()
+            book_arc.lock().unwrap().buy_nowait(50)
         })
         .await;
         println!("done {:?}", s);
@@ -66,9 +78,24 @@ async fn main() -> Result<(), IoError> {
             .unwrap(),
     );
 
+    // book keeping
+    let book = Arc::new(Mutex::new(Book::new(0, 0, hub.clone())));
+    book.lock().unwrap().sell_wait(Order {
+        id: Uuid::new_v4(),
+        quantity: 1000,
+        price: 103_f32,
+        kind: Some(OrderType::LimitSell),
+    });
+    book.lock().unwrap().buy_wait(Order {
+        id: Uuid::new_v4(),
+        quantity: 150,
+        price: 100_f32,
+        kind: Some(OrderType::LimitBuy),
+    });
+
     // spawn sequencer task
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx));
+    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, book.clone()));
 
     let proc: Arc<Processor> = Arc::new(Processor::new(hub.clone(), seq_tx));
 

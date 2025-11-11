@@ -17,7 +17,7 @@ pub struct Book {
 impl Book {
     // TODO: none of this is thread-safe,
     // wrap all in mutex?
-    fn new(id: usize, quantity: usize, hub: Arc<Hub>) -> Self {
+    pub fn new(id: usize, quantity: usize, hub: Arc<Hub>) -> Self {
         Self {
             id: id,
             _q: quantity,
@@ -43,7 +43,7 @@ impl Book {
     pub fn buy_wait(&mut self, order: Order) {
         // TODO: double check this logic, doesn't feel right lol
         binary_insert_by_key(&mut self.ask, order, |o| o.price, true);
-        self._q -= order.quantity;
+        //self._q -= order.quantity;
     }
 
     pub fn spread(self) -> Option<(f32, f32)> {
@@ -76,7 +76,7 @@ impl Book {
             let t: usize = ord.quantity + c;
             i += 1;
             if t >= req_sz {
-                let diff: usize = t - req_sz;
+                let diff: usize = req_sz - c;
                 x += ord.price * (diff as f32);
                 c += diff;
                 ord.quantity -= diff;
@@ -111,7 +111,7 @@ impl Book {
             self._q += req_sz;
         }
 
-        // signal to clients; we should offload this to a separate thread.
+        // signal to clients; TODO: we should offload this to a separate thread.
         self.hub.broadcast_to(_clients);
 
         Some(Order {
