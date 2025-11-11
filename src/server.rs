@@ -4,7 +4,7 @@ use rayon::{prelude::*, ThreadPoolBuilder};
 use serde_json;
 use std::{env, io::Error as IoError, sync::Arc};
 use tokio::{
-    net::{TcpStream, TcpListener},
+    net::{TcpListener, TcpStream},
     sync::mpsc,
 };
 
