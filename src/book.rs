@@ -14,7 +14,7 @@ pub struct Book {
     bid: Vec<Order>, // sorted desc
     ask: Vec<Order>, // sorted asc
     hub: Arc<Hub>,
-    sig_tx: mpsc::Sender<Vec<Order>>,
+    sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
 }
 
 impl Book {
@@ -24,7 +24,7 @@ impl Book {
         id: usize,
         quantity: usize,
         hub: Arc<Hub>,
-        sig_tx: mpsc::Sender<Vec<Order>>,
+        sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
     ) -> Self {
         Self {
             id: id,
@@ -79,7 +79,7 @@ impl Book {
         let mut x: f32 = 0_f32;
         let mut i: usize = 0;
 
-        let mut _clients: Vec<Order> = Vec::new();
+        let mut _clients = Vec::new();
 
         while c > 0 && i < v.len() {
             if v[i].quantity <= c {
@@ -119,7 +119,7 @@ impl Book {
         }
 
         // signal to clients;
-        let _ = self.sig_tx.try_send(_clients);
+        let _ = self.sig_tx.try_send(Arc::new(_clients));
 
         Some(Order {
             id: Uuid::new_v4(), // TODO: filler right now, get actual connection id

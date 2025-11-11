@@ -56,10 +56,10 @@ async fn matcher(
     }
 }
 
-async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Vec<Order>>) {
+async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Arc<Vec<Order>>>) {
     while let Some(x) = rx.recv().await {
         println!("broadcasting {:?}", x);
-        hub.broadcast_to(x);
+        hub.broadcast_to(x.clone());
     }
 }
 
@@ -76,7 +76,7 @@ async fn main() -> Result<(), IoError> {
 
     let (seq_tx, seq_rx) = mpsc::channel::<Bytes>(1024);
     let (mat_tx, mat_rx) = mpsc::channel::<Bytes>(1024);
-    let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
+    let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
 
     let pool = Arc::new(
         ThreadPoolBuilder::new()

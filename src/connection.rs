@@ -46,7 +46,7 @@ impl Hub {
         }
     }
 
-    pub fn broadcast_to(&self, clients: Vec<Order>) {
+    pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
         for c in clients.iter() {
             println!("notifying {:?}", c.id);
             if let Some(conn) = self.conns.get(&c.id) {
