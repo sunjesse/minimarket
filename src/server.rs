@@ -70,7 +70,7 @@ async fn main() -> Result<(), IoError> {
 
     let pool = Arc::new(
         ThreadPoolBuilder::new()
-            .num_threads(num_cpus::get_physical())
+            .num_threads(num_cpus::get_physical() - 1) // save one for tokio
             .thread_name(|i| format!("thread-{}", i))
             .build()
             .unwrap(),
