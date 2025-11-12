@@ -58,21 +58,12 @@ impl Hub {
     }
 }
 
-pub struct Processor {
+pub async fn conn_task(
     hub: Arc<Hub>,
     seq_tx: mpsc::Sender<Order>,
-}
-
-impl Processor {
-    pub fn new(hub: Arc<Hub>, seq_tx: mpsc::Sender<Order>) -> Self {
-        Processor {
-            hub: hub,
-            seq_tx: seq_tx,
-        }
-    }
-}
-
-pub async fn conn_task(proc: Arc<Processor>, stream: TcpStream, addr: SocketAddr) -> Result<()> {
+    stream: TcpStream,
+    addr: SocketAddr,
+) -> Result<()> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     println!("socket up: {:?}", addr);
 
@@ -80,8 +71,6 @@ pub async fn conn_task(proc: Arc<Processor>, stream: TcpStream, addr: SocketAddr
     let (tx_data, mut rx_data) = mpsc::channel::<std::sync::Arc<Bytes>>(512);
 
     let id = Uuid::new_v4();
-    let hub: Arc<Hub> = proc.hub.clone();
-    let seq_tx = proc.seq_tx.clone(); // per connection sender
 
     hub.register(
         id,

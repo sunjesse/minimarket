@@ -72,10 +72,8 @@ async fn main() -> Result<(), IoError> {
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, exchange.clone()));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
-    let proc: Arc<Processor> = Arc::new(Processor::new(hub.clone(), seq_tx));
-
     while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(conn_task(proc.clone(), stream, addr));
+        tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
     }
 
     Ok(())
