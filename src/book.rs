@@ -17,8 +17,7 @@ pub struct Book {
 }
 
 impl Book {
-    // TODO: none of this is thread-safe,
-    // wrap all in mutex?
+    // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
     pub fn new(
         id: usize,
         quantity: usize,
