@@ -60,7 +60,7 @@ impl Hub {
 
 pub struct Processor {
     hub: Arc<Hub>,
-    seq_tx: mpsc::Sender<Order>, // TODO: change type to struct
+    seq_tx: mpsc::Sender<Order>,
 }
 
 impl Processor {
