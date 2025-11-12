@@ -50,7 +50,7 @@ impl Security {
     }
 
     pub fn spread(&self) -> Option<(f32, f32)> {
-        if self.ask.len() == 0 || self.bid.len() == 0 {
+        if self.ask.is_empty() || self.bid.is_empty() {
             return None;
         }
         Some((self.bid[0].price, self.ask[0].price))
