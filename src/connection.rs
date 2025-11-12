@@ -72,11 +72,7 @@ impl Processor {
     }
 }
 
-pub async fn new_connection(
-    proc: Arc<Processor>,
-    stream: TcpStream,
-    addr: SocketAddr,
-) -> Result<()> {
+pub async fn conn_task(proc: Arc<Processor>, stream: TcpStream, addr: SocketAddr) -> Result<()> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     println!("socket up: {:?}", addr);
 
