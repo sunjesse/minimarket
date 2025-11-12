@@ -7,7 +7,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use uuid::Uuid;
 
-use minimarket::{order_to_bytes, Order, OrderType};
+use minimarket::{bytes_to_order, order_to_bytes, Order, OrderType};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -95,7 +95,9 @@ async fn main() {
     let ws_to_stdout = {
         read.for_each(|message| async {
             let data = message.unwrap().into_data();
-            tokio::io::stdout().write_all(&data).await.unwrap();
+            if data.len() > 0 {
+                println!("received {:?}", bytes_to_order(&data));
+            }
         })
     };
 
