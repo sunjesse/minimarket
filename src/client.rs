@@ -12,7 +12,7 @@ use minimarket::{bytes_to_order, order_to_bytes, Order, OrderType, Symbol};
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
 
-    // expect like "b100@250" or "s50@120"
+    // expect like "bTICKER@100@250" or "sTICKER@50@120"
     if input.len() < 4 {
         return None;
     }
