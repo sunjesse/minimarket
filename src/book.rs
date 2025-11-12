@@ -85,7 +85,6 @@ impl Book {
             if v[i].quantity <= c {
                 c -= v[i].quantity;
                 x += v[i].price * (v[i].quantity as f32);
-                v[i].quantity = 0;
                 i += 1;
                 _clients.push(Order {
                     id: v[i].id,
@@ -93,6 +92,7 @@ impl Book {
                     price: v[i].price,
                     kind: None,
                 });
+                v[i].quantity = 0;
             } else {
                 x += v[i].price * (c as f32);
                 v[i].quantity -= c;
