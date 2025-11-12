@@ -77,7 +77,7 @@ async fn main() -> Result<(), IoError> {
             .unwrap(),
     );
 
-    let security = Arc::new(Mutex::new(Security::new(0, 0, hub.clone(), bc_tx)));
+    let security = Arc::new(Mutex::new(Security::new(0, bc_tx)));
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, security.clone()));

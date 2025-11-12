@@ -1,7 +1,7 @@
 use std::env;
 
 use futures_util::{pin_mut, StreamExt};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
@@ -41,6 +41,7 @@ fn parse_order(input: &str) -> Option<Order> {
     })
 }
 
+#[allow(unused)]
 async fn read_stdin(tx: mpsc::UnboundedSender<Message>) {
     let mut stdin = tokio::io::stdin();
     loop {

@@ -2,7 +2,6 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::connection::Hub;
 use crate::order::{Order, OrderType};
 use crate::utils::binary_insert_by_key;
 
@@ -12,24 +11,17 @@ pub struct Security {
     _q: usize,       // quantity
     bid: Vec<Order>, // sorted desc
     ask: Vec<Order>, // sorted asc
-    hub: Arc<Hub>,
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
 }
 
 impl Security {
     // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
-    pub fn new(
-        id: usize,
-        quantity: usize,
-        hub: Arc<Hub>,
-        sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
-    ) -> Self {
+    pub fn new(id: usize, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             _id: id,
-            _q: quantity,
+            _q: 0,
             bid: Vec::new(),
             ask: Vec::new(),
-            hub: hub,
             sig_tx: sig_tx,
         }
     }
@@ -130,10 +122,12 @@ impl Security {
     }
 }
 
+#[allow(unused)]
 pub struct Exchange {
     securities: Arc<DashMap<String, Security>>,
 }
 
+#[allow(unused)]
 impl Exchange {
     pub fn new() -> Self {
         Self {
