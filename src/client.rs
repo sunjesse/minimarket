@@ -34,7 +34,7 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
-    println!("{:?} - {:?} - {:?}", sym, quantity, price);
+    println!("{:?}: {:?} shares @ {:?}", sym, quantity, price);
     Some(Order {
         id: Uuid::new_v4(), // TODO: replace with Option<Uuid> in future.
         sym: Symbol(sym.into()),
