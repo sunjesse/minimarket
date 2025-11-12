@@ -1,10 +1,6 @@
 use anyhow::Result;
 use rayon::ThreadPoolBuilder;
-use std::{
-    env,
-    io::Error as IoError,
-    sync::Arc,
-};
+use std::{env, io::Error as IoError, sync::Arc};
 use tokio::{net::TcpListener, sync::mpsc};
 
 use minimarket::*;

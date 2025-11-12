@@ -58,7 +58,7 @@ impl Security {
 
     pub fn current_price(&self) -> Option<f32> {
         if let Some((lb, ub)) = self.spread() {
-            Some((ub+lb)/2_f32);
+            Some((ub + lb) / 2_f32);
         }
         None
     }
@@ -167,7 +167,12 @@ impl Exchange {
     pub fn list_all_security_prices(&self) {
         // TODO: right now it just prints lol
         for kv in self.securities.iter() {
-            println!("[{:?}] {:?}: {:?}", std::time::Instant::now(), kv.key(), kv.value().current_price());
+            println!(
+                "[{:?}] {:?}: {:?}",
+                std::time::Instant::now(),
+                kv.key(),
+                kv.value().current_price()
+            );
         }
     }
 }
