@@ -1,28 +1,31 @@
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
-use crate::order::{Order, OrderType};
+use crate::order::{Order, OrderType, Symbol};
 use crate::utils::binary_insert_by_key;
 
 #[derive(Debug)]
 pub struct Security {
-    _id: usize,
+    _id: Uuid,
     _q: usize,       // quantity
     bid: Vec<Order>, // sorted desc
     ask: Vec<Order>, // sorted asc
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
+    sym: Symbol,
 }
 
 impl Security {
     // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
-    pub fn new(id: usize, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
+    pub fn new<S: AsRef<str>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
-            _id: id,
+            _id: Uuid::new_v4(),
             _q: 0,
             bid: Vec::new(),
             ask: Vec::new(),
             sig_tx: sig_tx,
+            sym: Symbol::new(sym),
         }
     }
 
@@ -31,7 +34,8 @@ impl Security {
     }
 
     pub fn sell_wait(&mut self, order: Order) -> Option<Order> {
-        binary_insert_by_key(&mut self.ask, order, |o| o.price, false);
+        // TODO: remove clone, pass in refs
+        binary_insert_by_key(&mut self.ask, order.clone(), |o| o.price, false);
         self._q += order.quantity;
         None
     }
@@ -80,6 +84,7 @@ impl Security {
                 i += 1;
                 _clients.push(Order {
                     id: v[i].id,
+                    sym: order.sym.clone(),
                     quantity: v[i].quantity,
                     price: v[i].price,
                     kind: Some(kind),
@@ -91,6 +96,7 @@ impl Security {
                 c = 0;
                 _clients.push(Order {
                     id: v[i].id,
+                    sym: order.sym.clone(),
                     quantity: c,
                     price: v[i].price,
                     kind: Some(kind),
@@ -115,6 +121,7 @@ impl Security {
 
         Some(Order {
             id: order.id,
+            sym: order.sym.clone(),
             quantity: req_sz,
             price: x / (req_sz as f32),
             kind: Some(kind),

@@ -7,7 +7,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use uuid::Uuid;
 
-use minimarket::{bytes_to_order, order_to_bytes, Order, OrderType};
+use minimarket::{bytes_to_order, order_to_bytes, Order, OrderType, Symbol};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -19,8 +19,9 @@ fn parse_order(input: &str) -> Option<Order> {
 
     let (side, rest) = input.split_at(1);
     let mut parts = rest.split('@');
-    let quantity_str = parts.next()?;
-    let price_str = parts.next()?;
+    let sym: &str = parts.next()?;
+    let quantity_str: &str = parts.next()?;
+    let price_str: &str = parts.next()?;
 
     let quantity = quantity_str.parse::<usize>().ok()?;
     let price = price_str.parse::<f32>().ok()?;
@@ -33,8 +34,10 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
+    println!("{:?} - {:?} - {:?}", sym, quantity, price);
     Some(Order {
-        id: Uuid::new_v4(),
+        id: Uuid::new_v4(), // TODO: replace with Option<Uuid> in future.
+        sym: Symbol(sym.into()),
         quantity,
         price,
         kind,
