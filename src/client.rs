@@ -79,15 +79,15 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
 async fn main() {
     let url = env::args()
         .nth(1)
-        .unwrap_or_else(|| panic!("this program requires at least one argument"));
+        .unwrap_or_else(|| panic!("requires >= one argument"));
 
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
     tokio::spawn(read_stdin_orders(stdin_tx));
 
-    let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
-    println!("websocket handshake has been successfully completed");
+    let (ws_stream, _) = connect_async(&url).await.expect("failed to connect");
+    println!("websocket handshake success!");
 
     let (write, read) = ws_stream.split();
 

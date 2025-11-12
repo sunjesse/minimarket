@@ -89,7 +89,7 @@ impl Book {
                     id: v[i].id,
                     quantity: v[i].quantity,
                     price: v[i].price,
-                    kind: None,
+                    kind: Some(kind),
                 });
                 v[i].quantity = 0;
             } else {
@@ -100,7 +100,7 @@ impl Book {
                     id: v[i].id,
                     quantity: c,
                     price: v[i].price,
-                    kind: None,
+                    kind: Some(kind),
                 });
             }
         }
