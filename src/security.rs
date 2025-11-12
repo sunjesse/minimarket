@@ -61,7 +61,7 @@ impl Security {
     }
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
-        //TODO: clean up all this spaghetti
+        // TODO: clean up all this spaghetti
         let req_sz: usize = order.quantity;
         if req_sz >= self._q {
             return None;
