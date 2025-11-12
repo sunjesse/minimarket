@@ -1,3 +1,3 @@
 ## minimarket
 
-fun project to learn more about websockets, tokio, & rayon :)
+fun project to learn more about websockets, tokio, rayon, and market making! :)
