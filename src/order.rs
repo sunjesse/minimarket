@@ -13,6 +13,17 @@ impl Symbol {
     }
 }
 
+impl From<&str> for Symbol {
+    fn from(s: &str) -> Self {
+        Symbol(Arc::<str>::from(s.trim().to_uppercase()))
+    }
+}
+impl From<String> for Symbol {
+    fn from(s: String) -> Self {
+        Symbol(Arc::<str>::from(s.trim().to_uppercase()))
+    }
+}
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum OrderType {
     MarketSell,

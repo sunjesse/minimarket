@@ -3,11 +3,10 @@ use rayon::ThreadPoolBuilder;
 use std::{
     env,
     io::Error as IoError,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 use tokio::{net::TcpListener, sync::mpsc};
 
-use minimarket::order::OrderType;
 use minimarket::*;
 
 async fn sequencer(
@@ -28,20 +27,13 @@ async fn matcher(
     _hub: Arc<Hub>,
     pool: Arc<rayon::ThreadPool>,
     mut rx: mpsc::Receiver<Order>,
-    security: Arc<Mutex<Security>>,
+    exchange: Arc<Exchange>,
 ) {
     while let Some(ord) = rx.recv().await {
-        let security_arc = Arc::clone(&security);
+        let exchange_arc = Arc::clone(&exchange);
         let s = rayon_await(pool.clone(), move || {
-            let mut b = security_arc.lock().unwrap();
             println!("ORDER IS {:?}", ord);
-            match ord.kind {
-                Some(OrderType::MarketBuy) => b.buy_nowait(ord),
-                Some(OrderType::MarketSell) => b.sell_nowait(ord),
-                Some(OrderType::LimitSell) => b.sell_wait(ord),
-                Some(OrderType::LimitBuy) => b.buy_wait(ord),
-                None => None,
-            }
+            exchange_arc.add_order(ord);
         })
         .await;
         println!("done {:?}", s);
@@ -77,10 +69,11 @@ async fn main() -> Result<(), IoError> {
             .unwrap(),
     );
 
-    let security = Arc::new(Mutex::new(Security::new("AAPL", bc_tx)));
+    //let security = Arc::new(Mutex::new(Security::new("AAPL", bc_tx)));
+    let exchange = Arc::new(Exchange::new(bc_tx));
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, security.clone()));
+    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, exchange.clone()));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
     let proc: Arc<Processor> = Arc::new(Processor::new(hub.clone(), seq_tx));

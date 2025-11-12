@@ -18,14 +18,14 @@ pub struct Security {
 
 impl Security {
     // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
-    pub fn new<S: AsRef<str>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
+    pub fn new<S: Into<Symbol>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             _id: Uuid::new_v4(),
             _q: 0,
             bid: Vec::new(),
             ask: Vec::new(),
             sig_tx: sig_tx,
-            sym: Symbol::new(sym),
+            sym: sym.into(),
         }
     }
 
@@ -49,11 +49,18 @@ impl Security {
         None
     }
 
-    pub fn spread(self) -> Option<(f32, f32)> {
+    pub fn spread(&self) -> Option<(f32, f32)> {
         if self.ask.len() == 0 || self.bid.len() == 0 {
             return None;
         }
         Some((self.bid[0].price, self.ask[0].price))
+    }
+
+    pub fn current_price(&self) -> Option<f32> {
+        if let Some((lb, ub)) = self.spread() {
+            Some((ub+lb)/2_f32);
+        }
+        None
     }
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
@@ -129,16 +136,38 @@ impl Security {
     }
 }
 
-#[allow(unused)]
 pub struct Exchange {
-    securities: Arc<DashMap<String, Security>>,
+    securities: Arc<DashMap<Symbol, Security>>,
+    broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>,
 }
 
-#[allow(unused)]
 impl Exchange {
-    pub fn new() -> Self {
+    pub fn new(broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             securities: Arc::new(DashMap::new()),
+            broadcast_tx: broadcast_tx,
+        }
+    }
+
+    pub fn add_order(&self, order: Order) -> Option<Order> {
+        let mut sec = self
+            .securities
+            .entry(order.sym.clone())
+            .or_insert(Security::new(order.sym.clone(), self.broadcast_tx.clone()));
+
+        match order.kind {
+            Some(OrderType::MarketBuy) => sec.value_mut().buy_nowait(order),
+            Some(OrderType::MarketSell) => sec.value_mut().sell_nowait(order),
+            Some(OrderType::LimitSell) => sec.value_mut().sell_wait(order),
+            Some(OrderType::LimitBuy) => sec.value_mut().buy_wait(order),
+            None => None,
+        }
+    }
+
+    pub fn list_all_security_prices(&self) {
+        // TODO: right now it just prints lol
+        for kv in self.securities.iter() {
+            println!("[{:?}] {:?}: {:?}", std::time::Instant::now(), kv.key(), kv.value().current_price());
         }
     }
 }
