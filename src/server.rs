@@ -28,12 +28,12 @@ async fn matcher(
     _hub: Arc<Hub>,
     pool: Arc<rayon::ThreadPool>,
     mut rx: mpsc::Receiver<Order>,
-    book: Arc<Mutex<Book>>,
+    security: Arc<Mutex<Security>>,
 ) {
     while let Some(ord) = rx.recv().await {
-        let book_arc = Arc::clone(&book);
+        let security_arc = Arc::clone(&security);
         let s = rayon_await(pool.clone(), move || {
-            let mut b = book_arc.lock().unwrap();
+            let mut b = security_arc.lock().unwrap();
             println!("ORDER IS {:?}", ord);
             match ord.kind {
                 Some(OrderType::MarketBuy) => b.buy_nowait(ord),
@@ -77,11 +77,10 @@ async fn main() -> Result<(), IoError> {
             .unwrap(),
     );
 
-    // book keeping
-    let book = Arc::new(Mutex::new(Book::new(0, 0, hub.clone(), bc_tx)));
+    let security = Arc::new(Mutex::new(Security::new(0, 0, hub.clone(), bc_tx)));
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, book.clone()));
+    tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, security.clone()));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
     let proc: Arc<Processor> = Arc::new(Processor::new(hub.clone(), seq_tx));

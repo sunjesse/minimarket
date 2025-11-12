@@ -7,7 +7,7 @@ use crate::order::{Order, OrderType};
 use crate::utils::binary_insert_by_key;
 
 #[derive(Debug)]
-pub struct Book {
+pub struct Security {
     _id: usize,
     _q: usize,       // quantity
     bid: Vec<Order>, // sorted desc
@@ -16,7 +16,7 @@ pub struct Book {
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
 }
 
-impl Book {
+impl Security {
     // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
     pub fn new(
         id: usize,
@@ -130,13 +130,13 @@ impl Book {
 }
 
 pub struct Exchange {
-    books: Arc<DashMap<String, Book>>,
+    securities: Arc<DashMap<String, Security>>,
 }
 
 impl Exchange {
     pub fn new() -> Self {
         Self {
-            books: Arc::new(DashMap::new()),
+            securities: Arc::new(DashMap::new()),
         }
     }
 }
