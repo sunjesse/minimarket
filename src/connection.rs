@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{order_to_bytes, Order};
+use crate::{bytes_to_order, order_to_bytes, Order};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -60,11 +60,11 @@ impl Hub {
 
 pub struct Processor {
     hub: Arc<Hub>,
-    seq_tx: mpsc::Sender<Bytes>, // TODO: change type to struct
+    seq_tx: mpsc::Sender<Order>, // TODO: change type to struct
 }
 
 impl Processor {
-    pub fn new(hub: Arc<Hub>, seq_tx: mpsc::Sender<Bytes>) -> Self {
+    pub fn new(hub: Arc<Hub>, seq_tx: mpsc::Sender<Order>) -> Self {
         Processor {
             hub: hub,
             seq_tx: seq_tx,
@@ -125,8 +125,9 @@ pub async fn new_connection(
                         println!("received {:?}", txt)
                     }
                     Ok(Message::Binary(b)) => {
-                        println!("[{:?}] received bytes {:?}", addr, b);
-                        if seq_tx.send(b).await.is_err() {
+                        let mut ord: Order = bytes_to_order(&b);
+                        ord.id = id; // TODO: figure out how to not need this later.
+                        if seq_tx.send(ord).await.is_err() {
                             println!("ERROR");
                             break;
                         }

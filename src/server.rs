@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bytes::Bytes;
 use rayon::ThreadPoolBuilder;
 use std::{
     env,
@@ -7,26 +6,20 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::{net::TcpListener, sync::mpsc};
-use uuid::Uuid;
 
-use minimarket::order::{bytes_to_order, OrderType};
+use minimarket::order::OrderType;
 use minimarket::*;
 
 async fn sequencer(
     _hub: Arc<Hub>,
-    mut rx: mpsc::Receiver<Bytes>,
-    tx: mpsc::Sender<Bytes>, // -> matcher
+    mut rx: mpsc::Receiver<Order>,
+    tx: mpsc::Sender<Order>, // -> matcher
 ) {
     // TODO: make sequencer actually do something useful,
     // that is, giving strong ordering to the reqs coming in.
-    while let Some(x) = rx.recv().await {
-        println!(
-            "seq has received {:?}, tid: {:?}",
-            x,
-            std::thread::current().id()
-        );
-        if tx.send(x.clone()).await.is_err() {
-            println!("ERROR'd SENDING {:?} from SEQ -> MAT", x);
+    while let Some(ord) = rx.recv().await {
+        if tx.send(ord.clone()).await.is_err() {
+            println!("ERROR'd SENDING {:?} from SEQ -> MAT", ord);
         }
     }
 }
@@ -34,14 +27,12 @@ async fn sequencer(
 async fn matcher(
     _hub: Arc<Hub>,
     pool: Arc<rayon::ThreadPool>,
-    mut rx: mpsc::Receiver<Bytes>,
+    mut rx: mpsc::Receiver<Order>,
     book: Arc<Mutex<Book>>,
 ) {
-    while let Some(x) = rx.recv().await {
+    while let Some(ord) = rx.recv().await {
         let book_arc = Arc::clone(&book);
         let s = rayon_await(pool.clone(), move || {
-            // TODO: fill with matching task
-            let ord: Order = bytes_to_order(&x);
             let mut b = book_arc.lock().unwrap();
             println!("ORDER IS {:?}", ord);
             match ord.kind {
@@ -74,8 +65,8 @@ async fn main() -> Result<(), IoError> {
     let listener = TcpListener::bind(&addr).await.expect("bind failed");
     println!("listening on: {}", addr);
 
-    let (seq_tx, seq_rx) = mpsc::channel::<Bytes>(1024);
-    let (mat_tx, mat_rx) = mpsc::channel::<Bytes>(1024);
+    let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
+    let (mat_tx, mat_rx) = mpsc::channel::<Order>(1024);
     let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
 
     let pool = Arc::new(
