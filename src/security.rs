@@ -150,16 +150,18 @@ impl Exchange {
     }
 
     pub fn add_order(&self, order: Order) -> Option<Order> {
-        let mut sec = self
+        let mut entry = self
             .securities
             .entry(order.sym.clone())
             .or_insert(Security::new(order.sym.clone(), self.broadcast_tx.clone()));
 
+        let mut sec = entry.value_mut();
+
         match order.kind {
-            Some(OrderType::MarketBuy) => sec.value_mut().buy_nowait(order),
-            Some(OrderType::MarketSell) => sec.value_mut().sell_nowait(order),
-            Some(OrderType::LimitSell) => sec.value_mut().sell_wait(order),
-            Some(OrderType::LimitBuy) => sec.value_mut().buy_wait(order),
+            Some(OrderType::MarketBuy) => sec.buy_nowait(order),
+            Some(OrderType::MarketSell) => sec.sell_nowait(order),
+            Some(OrderType::LimitSell) => sec.sell_wait(order),
+            Some(OrderType::LimitBuy) => sec.buy_wait(order),
             None => None,
         }
     }
