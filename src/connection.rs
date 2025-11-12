@@ -124,7 +124,7 @@ pub async fn conn_task(proc: Arc<Processor>, stream: TcpStream, addr: SocketAddr
                         let mut ord: Order = bytes_to_order(&b);
                         ord.id = id; // TODO: figure out how to not need this later.
                         if seq_tx.send(ord).await.is_err() {
-                            println!("ERROR");
+                            eprintln!("ERROR");
                             break;
                         }
                     }

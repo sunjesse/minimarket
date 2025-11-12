@@ -14,7 +14,7 @@ async fn sequencer(
     // that is, giving strong ordering to the reqs coming in.
     while let Some(ord) = rx.recv().await {
         if tx.send(ord.clone()).await.is_err() {
-            println!("ERROR'd SENDING {:?} from SEQ -> MAT", ord);
+            eprintln!("ERROR'd SENDING {:?} from SEQ -> MAT", ord);
         }
     }
 }
