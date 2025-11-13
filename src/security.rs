@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -155,7 +156,7 @@ impl Exchange {
             .entry(order.sym.clone())
             .or_insert(Security::new(order.sym.clone(), self.broadcast_tx.clone()));
 
-        let mut sec = entry.value_mut();
+        let sec = entry.value_mut();
 
         match order.kind {
             Some(OrderType::MarketBuy) => sec.buy_nowait(order),
@@ -166,15 +167,26 @@ impl Exchange {
         }
     }
 
-    pub fn list_all_security_prices(&self) {
-        // TODO: right now it just prints lol
-        for kv in self.securities.iter() {
-            println!(
-                "[{:?}] {:?}: {:?}",
-                std::time::Instant::now(),
-                kv.key(),
-                kv.value().current_price()
-            );
-        }
+    pub fn list_all_security_prices(&self) -> Vec<(String, f32)> {
+        self.securities
+            .iter()
+            .map(|kv| {
+                (
+                    kv.key().to_string(),
+                    kv.value().current_price().unwrap_or(-1_f32),
+                )
+            })
+            .collect()
     }
+}
+
+// hitting orphan rules (for now, reimplement vec<(string, f32)> as struct)
+// so implementing as fn's for now.
+pub fn vec_to_bytes(v: &Vec<(String, f32)>) -> Bytes {
+    Bytes::from(bincode::serialize(v).expect("serialize"))
+}
+
+#[allow(unused)]
+pub fn bytes_to_vec(b: &Bytes) -> Vec<(String, f32)> {
+    bincode::deserialize(b).expect("deserialize")
 }

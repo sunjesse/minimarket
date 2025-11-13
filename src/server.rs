@@ -72,7 +72,13 @@ async fn main() -> Result<(), IoError> {
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
     while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+        tokio::spawn(conn_task(
+            hub.clone(),
+            exchange.clone(),
+            seq_tx.clone(),
+            stream,
+            addr,
+        ));
     }
 
     Ok(())

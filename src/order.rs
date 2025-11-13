@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -21,6 +22,18 @@ impl From<&str> for Symbol {
 impl From<String> for Symbol {
     fn from(s: String) -> Self {
         Symbol(Arc::<str>::from(s.trim().to_uppercase()))
+    }
+}
+
+impl AsRef<str> for Symbol {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 

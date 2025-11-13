@@ -100,7 +100,8 @@ async fn main() {
         read.for_each(|message| async {
             let data = message.unwrap().into_data();
             if data.len() > 0 {
-                println!("received {:?}", Order::from(&data));
+                // TODO: below could receive pings, Orders, etc. figure out how to parse
+                println!("received {:?}", data); //Order::from(&data));
             }
         })
     };
