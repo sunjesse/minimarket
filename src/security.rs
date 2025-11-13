@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -167,26 +168,58 @@ impl Exchange {
         }
     }
 
-    pub fn list_all_security_prices(&self) -> Vec<(String, f32)> {
-        self.securities
+    pub fn list_all_security_prices(&self) -> SecPriceVec {
+        let v: Vec<SecPrice> = self
+            .securities
             .iter()
             .map(|kv| {
-                (
-                    kv.key().to_string(),
-                    kv.value().current_price().unwrap_or(-1_f32),
-                )
+                let k: Symbol = kv.key().clone();
+                let v: f32 = kv.value().current_price().unwrap_or(-1.0);
+                SecPrice((k, v))
             })
-            .collect()
+            .collect();
+        SecPriceVec(v)
     }
 }
 
-// hitting orphan rules (for now, reimplement vec<(string, f32)> as struct)
-// so implementing as fn's for now.
-pub fn vec_to_bytes(v: &Vec<(String, f32)>) -> Bytes {
-    Bytes::from(bincode::serialize(v).expect("serialize"))
+#[derive(Serialize, Deserialize)]
+pub struct SecPrice(pub (Symbol, f32));
+
+impl SecPrice {
+    pub fn new(sym: Symbol, price: f32) -> Self {
+        Self((sym, price))
+    }
 }
 
-#[allow(unused)]
-pub fn bytes_to_vec(b: &Bytes) -> Vec<(String, f32)> {
-    bincode::deserialize(b).expect("deserialize")
+impl From<&Bytes> for SecPrice {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize(b).expect("deserialize")
+    }
+}
+
+impl From<&SecPrice> for Bytes {
+    fn from(sp: &SecPrice) -> Self {
+        Bytes::from(bincode::serialize(sp).expect("serialize"))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SecPriceVec(pub Vec<SecPrice>);
+
+impl SecPriceVec {
+    pub fn new(v: Vec<(Symbol, f32)>) -> Self {
+        Self(v.into_iter().map(|(s, p)| SecPrice((s, p))).collect())
+    }
+}
+
+impl From<&Bytes> for SecPriceVec {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize(b).expect("deserialize")
+    }
+}
+
+impl From<&SecPriceVec> for Bytes {
+    fn from(v: &SecPriceVec) -> Self {
+        Bytes::from(bincode::serialize(v).expect("serialize"))
+    }
 }

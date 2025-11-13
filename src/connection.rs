@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{vec_to_bytes, Exchange, Order};
+use crate::{Exchange, Order};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -144,7 +144,7 @@ pub async fn conn_task(
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
             loop {
                 interval.tick().await;
-                let prices = Arc::new(vec_to_bytes(&exchange.list_all_security_prices()));
+                let prices = Arc::new(Bytes::from(&exchange.list_all_security_prices()));
                 hub.broadcast(prices.clone());
             }
         })
