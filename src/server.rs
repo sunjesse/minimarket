@@ -65,7 +65,6 @@ async fn main() -> Result<(), IoError> {
             .unwrap(),
     );
 
-    //let security = Arc::new(Mutex::new(Security::new("AAPL", bc_tx)));
     let exchange = Arc::new(Exchange::new(bc_tx));
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
