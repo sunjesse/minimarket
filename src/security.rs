@@ -58,7 +58,7 @@ impl Security {
 
     pub fn current_price(&self) -> Option<f32> {
         if let Some((lb, ub)) = self.spread() {
-            Some((ub + lb) / 2_f32);
+            return Some((ub + lb) / 2_f32);
         }
         None
     }
