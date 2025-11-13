@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{Exchange, Order};
+use crate::{Exchange, Frame, Order};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -44,7 +44,10 @@ impl Hub {
     pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
         for c in clients.iter() {
             if let Some(conn) = self.conns.get(&c.id) {
-                let _ = conn.data.try_send(Bytes::from(c).into());
+                // TODO: don't love this c.clone() here. figure out how to fix it.
+                let _ = conn
+                    .data
+                    .try_send(Bytes::from(&Frame::Order(c.clone())).into());
             }
         }
     }
@@ -144,7 +147,9 @@ pub async fn conn_task(
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
             loop {
                 interval.tick().await;
-                let prices = Arc::new(Bytes::from(&exchange.list_all_security_prices()));
+                let prices = Arc::new(Bytes::from(&Frame::Prices(
+                    exchange.list_all_security_prices(),
+                )));
                 hub.broadcast(prices.clone());
             }
         })

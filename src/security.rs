@@ -182,7 +182,7 @@ impl Exchange {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SecPrice(pub (Symbol, f32));
 
 impl SecPrice {
@@ -203,7 +203,7 @@ impl From<&SecPrice> for Bytes {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SecPriceVec(pub Vec<SecPrice>);
 
 impl SecPriceVec {

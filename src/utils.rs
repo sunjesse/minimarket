@@ -1,5 +1,9 @@
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::sync::oneshot;
+
+use crate::{Order, SecPriceVec};
 
 pub async fn rayon_await<T: Send + 'static>(
     pool: Arc<rayon::ThreadPool>,
@@ -29,4 +33,22 @@ where
         Ok(i) | Err(i) => i,
     };
     v.insert(pos, item);
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Frame {
+    Order(Order),
+    Prices(SecPriceVec),
+}
+
+impl From<&Frame> for Bytes {
+    fn from(f: &Frame) -> Self {
+        Bytes::from(bincode::serialize(f).expect("s"))
+    }
+}
+
+impl From<&Bytes> for Frame {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize(b).expect("d")
+    }
 }

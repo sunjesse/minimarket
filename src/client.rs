@@ -7,7 +7,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use uuid::Uuid;
 
-use minimarket::{Order, OrderType, Symbol};
+use minimarket::{Frame, Order, OrderType, Symbol};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -98,10 +98,14 @@ async fn main() {
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
     let ws_to_stdout = {
         read.for_each(|message| async {
-            let data = message.unwrap().into_data();
-            if data.len() > 0 {
-                // TODO: below could receive pings, Orders, etc. figure out how to parse
-                println!("received {:?}", data); //Order::from(&data));
+            match message {
+                Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data) {
+                    Ok(Frame::Order(o)) => println!("received {:?}", o),
+                    Ok(Frame::Prices(p)) => println!("prices: {:?}", p),
+                    Err(_) => {}
+                },
+                Err(_) => {}
+                _ => {}
             }
         })
     };
