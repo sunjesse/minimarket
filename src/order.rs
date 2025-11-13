@@ -41,11 +41,15 @@ pub struct Order {
     pub kind: Option<OrderType>,
 }
 
-pub fn order_to_bytes(order: &Order) -> Bytes {
-    let v = bincode::serialize(order).expect("serialize");
-    Bytes::from(v)
+impl From<&Bytes> for Order {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize::<Order>(b).expect("error deserializing")
+    }
 }
 
-pub fn bytes_to_order(bytes: &Bytes) -> Order {
-    bincode::deserialize::<Order>(bytes).expect("deserialize")
+impl From<&Order> for Bytes {
+    fn from(o: &Order) -> Self {
+        let v = bincode::serialize(o).expect("error serializing");
+        Bytes::from(v)
+    }
 }

@@ -1,13 +1,13 @@
-use std::env;
-
+use bytes::Bytes;
 use futures_util::{pin_mut, StreamExt};
+use std::env;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use uuid::Uuid;
 
-use minimarket::{bytes_to_order, order_to_bytes, Order, OrderType, Symbol};
+use minimarket::{Order, OrderType, Symbol};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -72,7 +72,7 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
         let s = String::from_utf8_lossy(&buf[..n]);
         for line in s.lines() {
             if let Some(order) = parse_order(line) {
-                let bytes = order_to_bytes(&order);
+                let bytes = Bytes::from(&order);
                 tx.send(Message::Binary(bytes)).unwrap();
             }
         }
@@ -100,7 +100,7 @@ async fn main() {
         read.for_each(|message| async {
             let data = message.unwrap().into_data();
             if data.len() > 0 {
-                println!("received {:?}", bytes_to_order(&data));
+                println!("received {:?}", Order::from(&data));
             }
         })
     };

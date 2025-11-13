@@ -75,7 +75,7 @@ impl Security {
         } else if kind == OrderType::MarketSell {
             &mut self.bid
         } else {
-            panic!("unexpected order type");
+            unreachable!();
         };
 
         let mut c: usize = req_sz;

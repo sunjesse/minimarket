@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{bytes_to_order, order_to_bytes, Order};
+use crate::Order;
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -44,7 +44,7 @@ impl Hub {
     pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
         for c in clients.iter() {
             if let Some(conn) = self.conns.get(&c.id) {
-                let _ = conn.data.try_send(order_to_bytes(c).into());
+                let _ = conn.data.try_send(Bytes::from(c).into());
             }
         }
     }
@@ -110,7 +110,7 @@ pub async fn conn_task(
                         println!("received {:?}", txt)
                     }
                     Ok(Message::Binary(b)) => {
-                        let mut ord: Order = bytes_to_order(&b);
+                        let mut ord: Order = Order::from(&b);
                         ord.id = id; // TODO: figure out how to not need this later.
                         if seq_tx.send(ord).await.is_err() {
                             eprintln!("ERROR");
