@@ -56,7 +56,7 @@ impl Security {
                 break;
             }
         }
-        self.ask.drain(..i);
+        self.bid.drain(..i);
         // otherwise we insert it into ask
         if order.quantity > 0 {
             binary_insert_by_key(&mut self.ask, order.clone(), |o| o.price, false);
@@ -90,7 +90,7 @@ impl Security {
                 break;
             }
         }
-        self.bid.drain(..i);
+        self.ask.drain(..i);
         if order.quantity > 0 {
             binary_insert_by_key(&mut self.bid, order, |o| o.price, true);
             return None;
