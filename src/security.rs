@@ -11,7 +11,7 @@ use crate::utils::binary_insert_by_key;
 #[derive(Debug)]
 pub struct Security {
     _id: Uuid,
-    _q: usize,       // quantity
+    _q: usize,       // materalized quantity of pending sell orders
     bid: Vec<Order>, // sorted desc
     ask: Vec<Order>, // sorted asc
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
@@ -60,7 +60,6 @@ impl Security {
         // otherwise we insert it into ask
         if order.quantity > 0 {
             binary_insert_by_key(&mut self.ask, order.clone(), |o| o.price, false);
-            // check if self._q should even be inc/dec here. or is it even needed?
             self._q += order.quantity;
             return None;
         }
