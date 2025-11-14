@@ -35,20 +35,67 @@ impl Security {
         self.consume_nowait(OrderType::MarketBuy, order)
     }
 
-    pub fn sell_wait(&mut self, order: Order) -> Option<Order> {
-        // TODO: remove clone, pass in refs
-        binary_insert_by_key(&mut self.ask, order.clone(), |o| o.price, false);
-        self._q += order.quantity;
-        None
+    pub fn sell_wait(&mut self, mut order: Order) -> Option<Order> {
+        // first check if there is a bid that matches
+        let mut i: usize = 0;
+        while order.quantity > 0 {
+            if let Some(bb) = self.bid.first_mut() {
+                if bb.price < order.price {
+                    break;
+                }
+
+                let t: usize = bb.quantity.min(order.quantity); // the traded amount
+                bb.quantity -= t;
+                order.quantity -= t;
+                self._q -= t;
+
+                if bb.quantity == 0 {
+                    i += 1;
+                }
+            } else {
+                break;
+            }
+        }
+        self.ask.drain(..i);
+        // otherwise we insert it into ask
+        if order.quantity > 0 {
+            binary_insert_by_key(&mut self.ask, order.clone(), |o| o.price, false);
+            // check if self._q should even be inc/dec here. or is it even needed?
+            self._q += order.quantity;
+            return None;
+        }
+        Some(order)
     }
 
     pub fn sell_nowait(&mut self, order: Order) -> Option<Order> {
         self.consume_nowait(OrderType::MarketSell, order)
     }
 
-    pub fn buy_wait(&mut self, order: Order) -> Option<Order> {
-        binary_insert_by_key(&mut self.bid, order, |o| o.price, true);
-        None
+    pub fn buy_wait(&mut self, mut order: Order) -> Option<Order> {
+        let mut i: usize = 0;
+        while order.quantity > 0 {
+            if let Some(ba) = self.ask.first_mut() {
+                if ba.price > order.price {
+                    break;
+                }
+                let t: usize = ba.quantity.min(order.quantity);
+                ba.quantity -= t;
+                order.quantity -= t;
+                self._q -= t;
+
+                if ba.quantity == 0 {
+                    i += 1;
+                }
+            } else {
+                break;
+            }
+        }
+        self.bid.drain(..i);
+        if order.quantity > 0 {
+            binary_insert_by_key(&mut self.bid, order, |o| o.price, true);
+            return None;
+        }
+        Some(order)
     }
 
     pub fn spread(&self) -> Option<(f32, f32)> {
