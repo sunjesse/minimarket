@@ -50,7 +50,7 @@ pub struct Order {
     pub id: Uuid, // client id
     pub sym: Symbol,
     pub quantity: usize,
-    pub price: f32,
+    pub price: i64, // in cents
     pub kind: Option<OrderType>,
 }
 

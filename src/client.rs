@@ -24,7 +24,7 @@ fn parse_order(input: &str) -> Option<Order> {
     let price_str: &str = parts.next()?;
 
     let quantity = quantity_str.parse::<usize>().ok()?;
-    let price = price_str.parse::<f32>().ok()?;
+    let price = price_str.parse::<i64>().ok()?;
 
     let kind = match side {
         "b" => Some(OrderType::MarketBuy),

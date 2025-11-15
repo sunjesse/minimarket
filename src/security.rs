@@ -1,6 +1,5 @@
 use bytes::Bytes;
 use dashmap::DashMap;
-use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -63,8 +62,8 @@ impl Security {
         if order.quantity > 0 {
             to.order.quantity = order.quantity; // TODO: tmp (1)
             binary_insert_by_cmp(&mut self.ask, to, |a, b| {
-                OrderedFloat(a.order.price)
-                    .cmp(&OrderedFloat(b.order.price)) // asc
+                a.order.price
+                    .cmp(&b.order.price) // asc
                     .then(a.dt.cmp(&b.dt)) // asc
             });
             self._q += order.quantity;
@@ -101,8 +100,8 @@ impl Security {
         if order.quantity > 0 {
             to.order.quantity = order.quantity;
             binary_insert_by_cmp(&mut self.bid, to, |a, b| {
-                OrderedFloat(b.order.price)
-                    .cmp(&OrderedFloat(a.order.price)) // desc
+                b.order.price
+                    .cmp(&a.order.price) // desc
                     .then(a.dt.cmp(&b.dt)) // asc
             });
             return None;
@@ -110,16 +109,16 @@ impl Security {
         Some(order)
     }
 
-    pub fn spread(&self) -> Option<(f32, f32)> {
+    pub fn spread(&self) -> Option<(i64, i64)> {
         if self.ask.is_empty() || self.bid.is_empty() {
             return None;
         }
         Some((self.bid[0].order.price, self.ask[0].order.price))
     }
 
-    pub fn current_price(&self) -> Option<f32> {
+    pub fn current_price(&self) -> Option<i64> {
         if let Some((lb, ub)) = self.spread() {
-            return Some((ub + lb) / 2_f32);
+            return Some((ub + lb) / 2_i64);
         }
         None
     }
@@ -140,7 +139,7 @@ impl Security {
         };
 
         let mut c: usize = req_sz;
-        let mut x: f32 = 0_f32;
+        let mut x: i64 = 0_i64;
         let mut i: usize = 0;
 
         let mut _clients = Vec::new();
@@ -148,7 +147,7 @@ impl Security {
         while c > 0 && i < v.len() {
             if v[i].order.quantity <= c {
                 c -= v[i].order.quantity;
-                x += v[i].order.price * (v[i].order.quantity as f32);
+                x += v[i].order.price * (v[i].order.quantity as i64);
                 i += 1;
                 _clients.push(Order {
                     id: v[i].order.id,
@@ -159,7 +158,7 @@ impl Security {
                 });
                 v[i].order.quantity = 0;
             } else {
-                x += v[i].order.price * (c as f32);
+                x += v[i].order.price * (c as i64);
                 v[i].order.quantity -= c;
                 c = 0;
                 _clients.push(Order {
@@ -191,7 +190,7 @@ impl Security {
             id: order.id,
             sym: order.sym.clone(),
             quantity: req_sz,
-            price: x / (req_sz as f32),
+            price: x / (req_sz as i64),
             kind: Some(kind),
         })
     }
@@ -236,7 +235,7 @@ impl Exchange {
             .iter()
             .map(|kv| {
                 let k: Symbol = kv.key().clone();
-                let v: f32 = kv.value().current_price().unwrap_or(-1.0);
+                let v: i64 = kv.value().current_price().unwrap_or(-1_i64);
                 SecPrice((k, v))
             })
             .collect();
@@ -245,10 +244,10 @@ impl Exchange {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SecPrice(pub (Symbol, f32));
+pub struct SecPrice(pub (Symbol, i64));
 
 impl SecPrice {
-    pub fn new(sym: Symbol, price: f32) -> Self {
+    pub fn new(sym: Symbol, price: i64) -> Self {
         Self((sym, price))
     }
 }
@@ -269,7 +268,7 @@ impl From<&SecPrice> for Bytes {
 pub struct SecPriceVec(pub Vec<SecPrice>);
 
 impl SecPriceVec {
-    pub fn new(v: Vec<(Symbol, f32)>) -> Self {
+    pub fn new(v: Vec<(Symbol, i64)>) -> Self {
         Self(v.into_iter().map(|(s, p)| SecPrice((s, p))).collect())
     }
 }
