@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::sync::Arc;
+use std::{fmt, time::Instant};
 use uuid::Uuid;
 
 // TODO: move this struct to interning in the future
@@ -64,5 +64,20 @@ impl From<&Order> for Bytes {
     fn from(o: &Order) -> Self {
         let v = bincode::serialize(o).expect("error serializing");
         Bytes::from(v)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimedOrder {
+    pub order: Order, // TODO: wrap in Arc later?
+    pub dt: Instant,
+}
+
+impl TimedOrder {
+    pub fn new(order: Order) -> Self {
+        Self {
+            order: order,
+            dt: Instant::now(),
+        }
     }
 }

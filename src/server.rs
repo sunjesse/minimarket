@@ -8,13 +8,12 @@ use minimarket::*;
 async fn sequencer(
     _hub: Arc<Hub>,
     mut rx: mpsc::Receiver<Order>,
-    tx: mpsc::Sender<Order>, // -> matcher
+    tx: mpsc::Sender<TimedOrder>, // -> matcher
 ) {
-    // TODO: make sequencer actually do something useful,
-    // that is, giving strong ordering to the reqs coming in.
     while let Some(ord) = rx.recv().await {
-        if tx.send(ord.clone()).await.is_err() {
-            eprintln!("ERROR'd SENDING {:?} from SEQ -> MAT", ord);
+        let to = TimedOrder::new(ord);
+        if tx.send(to).await.is_err() {
+            eprintln!("ERROR'd sending from SEQ -> MAT");
         }
     }
 }
@@ -22,14 +21,14 @@ async fn sequencer(
 async fn matcher(
     _hub: Arc<Hub>,
     pool: Arc<rayon::ThreadPool>,
-    mut rx: mpsc::Receiver<Order>,
+    mut rx: mpsc::Receiver<TimedOrder>,
     exchange: Arc<Exchange>,
 ) {
-    while let Some(ord) = rx.recv().await {
+    while let Some(to) = rx.recv().await {
         let exchange_arc = Arc::clone(&exchange);
         let s = rayon_await(pool.clone(), move || {
-            println!("ORDER IS {:?}", ord);
-            exchange_arc.add_order(ord);
+            println!("ORDER IS {:?}", to);
+            exchange_arc.add_order(to);
         })
         .await;
         println!("done {:?}", s);
@@ -54,7 +53,7 @@ async fn main() -> Result<(), IoError> {
     println!("listening on: {}", addr);
 
     let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
-    let (mat_tx, mat_rx) = mpsc::channel::<Order>(1024);
+    let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
     let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
 
     let pool = Arc::new(
