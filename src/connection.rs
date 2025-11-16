@@ -43,11 +43,13 @@ impl Hub {
 
     pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
         for c in clients.iter() {
-            if let Some(conn) = self.conns.get(&c.id) {
-                // TODO: don't love this c.clone() here. figure out how to fix it.
-                let _ = conn
-                    .data
-                    .try_send(Bytes::from(&Frame::Order(c.clone())).into());
+            if let Some(id) = c.id {
+                if let Some(conn) = self.conns.get(&id) {
+                    // TODO: don't love this c.clone() here. figure out how to fix it.
+                    let _ = conn
+                        .data
+                        .try_send(Bytes::from(&Frame::Order(c.clone())).into());
+                }
             }
         }
     }
@@ -115,7 +117,7 @@ pub async fn conn_task(
                     }
                     Ok(Message::Binary(b)) => {
                         let mut ord: Order = Order::from(&b);
-                        ord.id = id; // TODO: figure out how to not need this later.
+                        ord.id = Some(id); // TODO: figure out how to not need this later.
                         if seq_tx.send(ord).await.is_err() {
                             eprintln!("ERROR");
                             break;

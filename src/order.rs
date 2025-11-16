@@ -47,7 +47,7 @@ pub enum OrderType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
-    pub id: Uuid, // client id
+    pub id: Option<Uuid>, // client id
     pub sym: Symbol,
     pub quantity: usize,
     pub price: i64, // in cents

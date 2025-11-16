@@ -5,7 +5,6 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use uuid::Uuid;
 
 use minimarket::{Frame, Order, OrderType, Symbol};
 
@@ -36,7 +35,7 @@ fn parse_order(input: &str) -> Option<Order> {
 
     println!("{:?}: {:?} shares @ {:?}", sym, quantity, price);
     Some(Order {
-        id: Uuid::new_v4(), // TODO: replace with Option<Uuid> in future.
+        id: None,
         sym: Symbol(sym.into()),
         quantity,
         price,

@@ -62,7 +62,8 @@ impl Security {
         if order.quantity > 0 {
             to.order.quantity = order.quantity; // TODO: tmp (1)
             binary_insert_by_cmp(&mut self.ask, to, |a, b| {
-                a.order.price
+                a.order
+                    .price
                     .cmp(&b.order.price) // asc
                     .then(a.dt.cmp(&b.dt)) // asc
             });
@@ -100,7 +101,8 @@ impl Security {
         if order.quantity > 0 {
             to.order.quantity = order.quantity;
             binary_insert_by_cmp(&mut self.bid, to, |a, b| {
-                b.order.price
+                b.order
+                    .price
                     .cmp(&a.order.price) // desc
                     .then(a.dt.cmp(&b.dt)) // asc
             });
