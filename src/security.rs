@@ -311,6 +311,9 @@ impl SecPriceSeries {
 
     // TODO: clearly there is some consolidating we can do to have less repetition among
     // the .mean(..) and .variance(..) methods.
+
+    // TODO #2: Moreover, should we be returning Option<f64>? can expect to get
+    // floating point numbers from these calculations.
     pub fn mean(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
         if start > end {
             eprintln!("start time cannot be after end");
@@ -331,10 +334,6 @@ impl SecPriceSeries {
     }
 
     pub fn variance(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
-        if start > end {
-            eprintln!("start time cannot be after end");
-            return None;
-        }
         // TODO: fix clones
         let Some(mu): Option<i64> = self.mean(sym.clone(), start.clone(), end.clone()) else {
             return None;
@@ -352,5 +351,12 @@ impl SecPriceSeries {
             }
         }
         None
+    }
+
+    pub fn std_deviation(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
+        let Some(var): Option<i64> = self.variance(sym.clone(), start.clone(), end.clone()) else {
+            return None;
+        }; 
+        Some(var.isqrt()) // TODO: currently returns value rounded down as it's all i64
     }
 }
