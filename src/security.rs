@@ -309,12 +309,13 @@ impl SecPriceSeries {
         }
     }
 
-    pub fn get_average_price(
-        &self,
-        sym: Symbol,
-        start: SystemTime,
-        end: SystemTime,
-    ) -> Option<i64> {
+    // TODO: clearly there is some consolidating we can do to have less repetition among
+    // the .mean(..) and .variance(..) methods.
+    pub fn mean(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
+        if start > end {
+            eprintln!("start time cannot be after end");
+            return None;
+        }
         if let Some(v) = self._t.get(&sym) {
             // TODO: optimize
             if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
@@ -324,6 +325,30 @@ impl SecPriceSeries {
                 return Some(r);
             } else {
                 return None;
+            }
+        }
+        None
+    }
+
+    pub fn variance(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
+        if start > end {
+            eprintln!("start time cannot be after end");
+            return None;
+        }
+        // TODO: fix clones
+        let Some(mu): Option<i64> = self.mean(sym.clone(), start.clone(), end.clone()) else {
+            return None;
+        };
+
+        if let Some(v) = self._t.get(&sym) {
+            if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
+                && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+            {
+                let r: i64 =
+                    v[s..=e].iter().map(|x| x.price * x.price).sum::<i64>() / ((e - s + 1) as i64);
+
+                let var: i64 = r - mu * mu;
+                return Some(var);
             }
         }
         None
