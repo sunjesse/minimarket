@@ -43,13 +43,13 @@ impl Hub {
 
     pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
         for c in clients.iter() {
-            if let Some(id) = c.id {
-                if let Some(conn) = self.conns.get(&id) {
-                    // TODO: don't love this c.clone() here. figure out how to fix it.
-                    let _ = conn
-                        .data
-                        .try_send(Bytes::from(&Frame::Order(c.clone())).into());
-                }
+            if let Some(id) = c.id
+                && let Some(conn) = self.conns.get(&id)
+            {
+                // TODO: don't love this c.clone() here. figure out how to fix it.
+                let _ = conn
+                    .data
+                    .try_send(Bytes::from(&Frame::Order(c.clone())).into());
             }
         }
     }

@@ -27,7 +27,7 @@ impl Security {
             _q: 0,
             bid: Vec::new(),
             ask: Vec::new(),
-            sig_tx: sig_tx,
+            sig_tx,
             sym: sym.into(),
         }
     }
@@ -204,7 +204,7 @@ impl Exchange {
     pub fn new(broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             securities: Arc::new(DashMap::new()),
-            broadcast_tx: broadcast_tx,
+            broadcast_tx,
         }
     }
 
@@ -252,8 +252,8 @@ pub struct SecPrice {
 impl SecPrice {
     pub fn new(sym: Symbol, price: Option<i64>) -> Self {
         Self {
-            sym: sym,
-            price: price,
+            sym,
+            price,
             // TODO: in theory, the time should be passed in from Security.current_price()
             dt: SystemTime::now(),
         }
@@ -293,7 +293,7 @@ impl From<&SecPriceVec> for Bytes {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SecPriceSeries {
     _t: DashMap<Symbol, Vec<SecPrice>>,
 }
@@ -319,51 +319,44 @@ impl SecPriceSeries {
             eprintln!("start time cannot be after end");
             return None;
         }
-        if let Some(v) = self._t.get(&sym) {
-            // TODO: optimize
-            if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
-                && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
-            {
-                let r: i64 = v[s..=e]
-                    .iter()
-                    .map(|x| if let Some(p) = x.price { p } else { 0_i64 })
-                    .sum::<i64>()
-                    / ((e - s + 1) as i64);
-                return Some(r);
-            } else {
-                return None;
-            }
+        // TODO: optimize
+        if let Some(v) = self._t.get(&sym)
+            && let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
+            && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+        {
+            let r: i64 = v[s..=e]
+                .iter()
+                .map(|x| x.price.unwrap_or_default())
+                .sum::<i64>()
+                / ((e - s + 1) as i64);
+            return Some(r);
         }
+
         None
     }
 
     pub fn variance(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
-        // TODO: fix clones
-        let Some(mu): Option<i64> = self.mean(sym.clone(), start.clone(), end.clone()) else {
-            return None;
-        };
+        let mu = self.mean(sym.clone(), start, end)?;
 
-        if let Some(v) = self._t.get(&sym) {
-            if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
-                && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
-            {
-                let r: i64 = v[s..=e]
-                    .iter()
-                    .map(|x| if let Some(p) = x.price { p * p } else { 0_i64 })
-                    .sum::<i64>()
-                    / ((e - s + 1) as i64);
+        if let Some(v) = self._t.get(&sym)
+            && let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
+            && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+        {
+            let r: i64 = v[s..=e]
+                .iter()
+                .map(|x| if let Some(p) = x.price { p * p } else { 0_i64 })
+                .sum::<i64>()
+                / ((e - s + 1) as i64);
 
-                let var: i64 = r - mu * mu;
-                return Some(var);
-            }
+            let var: i64 = r - mu * mu;
+            return Some(var);
         }
+
         None
     }
 
     pub fn std_deviation(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
-        let Some(var): Option<i64> = self.variance(sym.clone(), start.clone(), end.clone()) else {
-            return None;
-        };
+        let var = self.variance(sym.clone(), start, end)?;
         Some(var.isqrt()) // TODO: currently returns value rounded down as it's all i64
     }
 }

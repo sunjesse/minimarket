@@ -76,7 +76,7 @@ pub struct TimedOrder {
 impl TimedOrder {
     pub fn new(order: Order) -> Self {
         Self {
-            order: order,
+            order,
             dt: SystemTime::now(),
         }
     }
