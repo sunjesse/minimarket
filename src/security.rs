@@ -127,7 +127,6 @@ impl Security {
     }
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
-        // TODO: clean up all this spaghetti
         let req_sz: usize = order.quantity;
         if req_sz >= self._q {
             return None;
@@ -145,28 +144,28 @@ impl Security {
         let mut x: i64 = 0_i64;
         let mut i: usize = 0;
 
-        let mut _clients = Vec::new();
+        let mut clients = Vec::new();
 
-        while c > 0 && i < v.len() {
-            let mut ord_at_i = Order {
-                id: v[i].order.id,
+        while c > 0 {
+            let Some(cur) = v.get_mut(i) else { break };
+
+            let take: usize = c.min(cur.order.quantity);
+
+            x += cur.order.price * (take as i64);
+            c -= take;
+            cur.order.quantity = take;
+
+            clients.push(Order {
+                id: cur.order.id,
                 sym: order.sym.clone(),
-                quantity: 0,
-                price: v[i].order.price,
+                quantity: take,
+                price: cur.order.price,
                 kind: Some(kind),
-            };
-            if v[i].order.quantity <= c {
-                c -= v[i].order.quantity;
-                x += v[i].order.price * (v[i].order.quantity as i64);
-                ord_at_i.quantity = v[i].order.quantity;
-                _clients.push(ord_at_i);
-                v[i].order.quantity = 0; // in theory not needed
-                i += 1;
+            });
+
+            if cur.order.quantity == 0 {
+                i += 1
             } else {
-                x += v[i].order.price * (c as i64);
-                v[i].order.quantity -= c;
-                ord_at_i.quantity = c;
-                _clients.push(ord_at_i);
                 break;
             }
         }
@@ -184,7 +183,7 @@ impl Security {
         }
 
         // signal to clients;
-        let _ = self.sig_tx.try_send(Arc::new(_clients));
+        let _ = self.sig_tx.try_send(Arc::new(clients));
 
         Some(Order {
             id: order.id,
