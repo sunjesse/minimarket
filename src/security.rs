@@ -15,6 +15,7 @@ pub struct Security {
     bid: Vec<TimedOrder>, // sorted desc
     ask: Vec<TimedOrder>, // sorted asc
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
+    #[allow(unused)]
     sym: Symbol,
 }
 
@@ -293,5 +294,42 @@ impl From<&Bytes> for SecPriceVec {
 impl From<&SecPriceVec> for Bytes {
     fn from(v: &SecPriceVec) -> Self {
         Bytes::from(bincode::serialize(v).expect("serialize"))
+    }
+}
+
+#[derive(Debug)]
+pub struct SecPriceSeries {
+    _t: DashMap<Symbol, Vec<SecPrice>>,
+}
+
+impl SecPriceSeries {
+    pub fn new() -> Self {
+        Self { _t: DashMap::new() }
+    }
+
+    pub fn add_price(&mut self, sp: SecPrice) {
+        if let Some(mut v) = self._t.get_mut(&sp.sym) {
+            binary_insert_by_cmp(&mut v, sp, |a, b| a.dt.cmp(&b.dt));
+        }
+    }
+
+    pub fn get_average_price(
+        &self,
+        sym: Symbol,
+        start: SystemTime,
+        end: SystemTime,
+    ) -> Option<i64> {
+        if let Some(v) = self._t.get(&sym) {
+            // TODO: optimize
+            if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
+                && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+            {
+                let r: i64 = v[s..=e].iter().map(|x| x.price).sum::<i64>() / ((e - s + 1) as i64);
+                return Some(r);
+            } else {
+                return None;
+            }
+        }
+        None
     }
 }

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use futures_util::{pin_mut, StreamExt};
+use futures_util::{StreamExt, pin_mut};
 use std::env;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
