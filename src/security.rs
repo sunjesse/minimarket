@@ -234,7 +234,7 @@ impl Exchange {
             .iter()
             .map(|kv| {
                 let k: Symbol = kv.key().clone();
-                let v: i64 = kv.value().current_price().unwrap_or(-1_i64);
+                let v: Option<i64> = kv.value().current_price();
                 SecPrice::new(k, v)
             })
             .collect();
@@ -245,12 +245,12 @@ impl Exchange {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SecPrice {
     sym: Symbol,
-    price: i64,
+    price: Option<i64>,
     dt: SystemTime,
 }
 
 impl SecPrice {
-    pub fn new(sym: Symbol, price: i64) -> Self {
+    pub fn new(sym: Symbol, price: Option<i64>) -> Self {
         Self {
             sym: sym,
             price: price,
@@ -276,7 +276,7 @@ impl From<&SecPrice> for Bytes {
 pub struct SecPriceVec(pub Vec<SecPrice>);
 
 impl SecPriceVec {
-    pub fn new(v: Vec<(Symbol, i64)>) -> Self {
+    pub fn new(v: Vec<(Symbol, Option<i64>)>) -> Self {
         Self(v.into_iter().map(|(s, p)| SecPrice::new(s, p)).collect())
     }
 }
@@ -324,7 +324,11 @@ impl SecPriceSeries {
             if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
                 && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
             {
-                let r: i64 = v[s..=e].iter().map(|x| x.price).sum::<i64>() / ((e - s + 1) as i64);
+                let r: i64 = v[s..=e]
+                    .iter()
+                    .map(|x| if let Some(p) = x.price { p } else { 0_i64 })
+                    .sum::<i64>()
+                    / ((e - s + 1) as i64);
                 return Some(r);
             } else {
                 return None;
@@ -343,8 +347,11 @@ impl SecPriceSeries {
             if let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
                 && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
             {
-                let r: i64 =
-                    v[s..=e].iter().map(|x| x.price * x.price).sum::<i64>() / ((e - s + 1) as i64);
+                let r: i64 = v[s..=e]
+                    .iter()
+                    .map(|x| if let Some(p) = x.price { p * p } else { 0_i64 })
+                    .sum::<i64>()
+                    / ((e - s + 1) as i64);
 
                 let var: i64 = r - mu * mu;
                 return Some(var);
@@ -356,7 +363,7 @@ impl SecPriceSeries {
     pub fn std_deviation(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
         let Some(var): Option<i64> = self.variance(sym.clone(), start.clone(), end.clone()) else {
             return None;
-        }; 
+        };
         Some(var.isqrt()) // TODO: currently returns value rounded down as it's all i64
     }
 }
