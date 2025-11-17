@@ -158,16 +158,16 @@ impl Security {
             if v[i].order.quantity <= c {
                 c -= v[i].order.quantity;
                 x += v[i].order.price * (v[i].order.quantity as i64);
-                i += 1;
                 ord_at_i.quantity = v[i].order.quantity;
                 _clients.push(ord_at_i);
                 v[i].order.quantity = 0; // in theory not needed
+                i += 1;
             } else {
                 x += v[i].order.price * (c as i64);
                 v[i].order.quantity -= c;
                 ord_at_i.quantity = c;
                 _clients.push(ord_at_i);
-                c = 0;
+                break;
             }
         }
 
