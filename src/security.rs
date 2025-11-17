@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -238,7 +238,7 @@ impl Exchange {
             .map(|kv| {
                 let k: Symbol = kv.key().clone();
                 let v: i64 = kv.value().current_price().unwrap_or(-1_i64);
-                SecPrice((k, v))
+                SecPrice::new(k, v)
             })
             .collect();
         SecPriceVec(v)
@@ -246,11 +246,20 @@ impl Exchange {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SecPrice(pub (Symbol, i64));
+pub struct SecPrice {
+    sym: Symbol,
+    price: i64,
+    dt: SystemTime,
+}
 
 impl SecPrice {
     pub fn new(sym: Symbol, price: i64) -> Self {
-        Self((sym, price))
+        Self {
+            sym: sym,
+            price: price,
+            // TODO: in theory, the time should be passed in from Security.current_price()
+            dt: SystemTime::now(),
+        }
     }
 }
 
@@ -271,7 +280,7 @@ pub struct SecPriceVec(pub Vec<SecPrice>);
 
 impl SecPriceVec {
     pub fn new(v: Vec<(Symbol, i64)>) -> Self {
-        Self(v.into_iter().map(|(s, p)| SecPrice((s, p))).collect())
+        Self(v.into_iter().map(|(s, p)| SecPrice::new(s, p)).collect())
     }
 }
 

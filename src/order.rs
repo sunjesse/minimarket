@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use std::{fmt, time::Instant};
+use std::{fmt, time::SystemTime};
 use uuid::Uuid;
 
 // TODO: move this struct to interning in the future
@@ -70,14 +70,14 @@ impl From<&Order> for Bytes {
 #[derive(Debug, Clone)]
 pub struct TimedOrder {
     pub order: Order, // TODO: wrap in Arc later?
-    pub dt: Instant,
+    pub dt: SystemTime,
 }
 
 impl TimedOrder {
     pub fn new(order: Order) -> Self {
         Self {
             order: order,
-            dt: Instant::now(),
+            dt: SystemTime::now(),
         }
     }
 }
