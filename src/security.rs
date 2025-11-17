@@ -148,29 +148,26 @@ impl Security {
         let mut _clients = Vec::new();
 
         while c > 0 && i < v.len() {
+            let mut ord_at_i = Order {
+                id: v[i].order.id,
+                sym: order.sym.clone(),
+                quantity: 0,
+                price: v[i].order.price,
+                kind: Some(kind),
+            };
             if v[i].order.quantity <= c {
                 c -= v[i].order.quantity;
                 x += v[i].order.price * (v[i].order.quantity as i64);
                 i += 1;
-                _clients.push(Order {
-                    id: v[i].order.id,
-                    sym: order.sym.clone(),
-                    quantity: v[i].order.quantity,
-                    price: v[i].order.price,
-                    kind: Some(kind),
-                });
-                v[i].order.quantity = 0;
+                ord_at_i.quantity = v[i].order.quantity;
+                _clients.push(ord_at_i);
+                v[i].order.quantity = 0; // in theory not needed
             } else {
                 x += v[i].order.price * (c as i64);
                 v[i].order.quantity -= c;
+                ord_at_i.quantity = c;
+                _clients.push(ord_at_i);
                 c = 0;
-                _clients.push(Order {
-                    id: v[i].order.id,
-                    sym: order.sym.clone(),
-                    quantity: c,
-                    price: v[i].order.price,
-                    kind: Some(kind),
-                });
             }
         }
 
