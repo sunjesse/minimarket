@@ -153,7 +153,7 @@ impl Security {
 
             x += cur.order.price * (take as i64);
             c -= take;
-            cur.order.quantity = take;
+            cur.order.quantity -= take;
 
             clients.push(Order {
                 id: cur.order.id,
