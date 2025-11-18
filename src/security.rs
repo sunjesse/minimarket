@@ -68,7 +68,10 @@ impl Security {
 
         let is_limit_buy: bool = OrderType::LimitBuy == kind;
 
-        let mut order = to.order.clone();
+        let mut order: Order = to.order.clone();
+        let requested: usize = order.quantity;
+
+        let mut total_cost: i64 = 0;
         let mut i: usize = 0;
         let mut clients: Vec<Order> = Vec::new();
 
@@ -88,6 +91,7 @@ impl Security {
                 // TODO: must avg out the price across the orders
                 // to compute the avg price when signalling back limit order's client.
                 let t: usize = cur.order.quantity.min(order.quantity);
+                total_cost += (t as i64) * cur.order.price;
                 cur.order.quantity -= t;
                 order.quantity -= t;
 
@@ -126,6 +130,8 @@ impl Security {
             });
             return None;
         }
+
+        order.price = total_cost / (requested - order.quantity) as i64;
         Some(order)
     }
 
