@@ -62,14 +62,15 @@ impl Security {
         None
     }
 
-    pub fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
+    fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
+        // CORRECTNESS: assume kind is ony limitbuy or limitsell
+        // we assume this is satisfied by the caller for now.
+
+        let is_limit_buy: bool = OrderType::LimitBuy == kind;
+
         let mut order = to.order.clone();
         let mut i: usize = 0;
         let mut clients: Vec<Order> = Vec::new();
-
-        // CORRECTNESS: assume kind is ony limitbuy or limitsell
-        // TODO: enforce this;
-        let is_limit_buy: bool = OrderType::LimitBuy == kind;
 
         let v: &mut Vec<TimedOrder> = if is_limit_buy {
             &mut self.ask
