@@ -36,80 +36,16 @@ impl Security {
         self.consume_nowait(OrderType::MarketBuy, to.order)
     }
 
-    pub fn sell_wait(&mut self, mut to: TimedOrder) -> Option<Order> {
-        // first check if there is a bid that matches
-        let mut order = to.order.clone(); // TODO: tmp (1)
-        let mut i: usize = 0;
-        while order.quantity > 0 {
-            if let Some(bb) = self.bid.first_mut() {
-                if bb.order.price < order.price {
-                    break;
-                }
-
-                let t: usize = bb.order.quantity.min(order.quantity); // the traded amount
-                bb.order.quantity -= t;
-                order.quantity -= t;
-                self._q -= t;
-
-                if bb.order.quantity == 0 {
-                    i += 1;
-                }
-            } else {
-                break;
-            }
-        }
-        self.bid.drain(..i);
-        // otherwise we insert it into ask
-        if order.quantity > 0 {
-            to.order.quantity = order.quantity; // TODO: tmp (1)
-            binary_insert_by_cmp(&mut self.ask, to, |a, b| {
-                a.order
-                    .price
-                    .cmp(&b.order.price) // asc
-                    .then(a.dt.cmp(&b.dt)) // asc
-            });
-            self._q += order.quantity;
-            return None;
-        }
-        Some(order)
+    pub fn sell_wait(&mut self, to: TimedOrder) -> Option<Order> {
+        self.consume_wait(OrderType::LimitSell, to)
     }
 
     pub fn sell_nowait(&mut self, to: TimedOrder) -> Option<Order> {
         self.consume_nowait(OrderType::MarketSell, to.order)
     }
 
-    pub fn buy_wait(&mut self, mut to: TimedOrder) -> Option<Order> {
-        let mut order = to.order.clone();
-        let mut i: usize = 0;
-        while order.quantity > 0 {
-            if let Some(ba) = self.ask.first_mut() {
-                if ba.order.price > order.price {
-                    break;
-                }
-                let t: usize = ba.order.quantity.min(order.quantity);
-                ba.order.quantity -= t;
-                order.quantity -= t;
-                self._q -= t;
-
-                if ba.order.quantity == 0 {
-                    i += 1;
-                }
-            } else {
-                break;
-            }
-        }
-        self.ask.drain(..i);
-        if order.quantity > 0 {
-            to.order.quantity = order.quantity;
-            binary_insert_by_cmp(&mut self.bid, to, |a, b| {
-                b.order
-                    .price
-                    .cmp(&a.order.price) // desc
-                    .then(a.dt.cmp(&b.dt)) // asc
-            });
-            return None;
-        }
-        Some(order)
+    pub fn buy_wait(&mut self, to: TimedOrder) -> Option<Order> {
+        self.consume_wait(OrderType::LimitBuy, to)
     }
 
     pub fn spread(&self) -> Option<(i64, i64)> {
@@ -124,6 +60,70 @@ impl Security {
             return Some((ub + lb) / 2_i64);
         }
         None
+    }
+
+    pub fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
+        let mut order = to.order.clone();
+        let mut i: usize = 0;
+        let mut clients: Vec<Order> = Vec::new();
+
+        // CORRECTNESS: assume kind is ony limitbuy or limitsell
+        // TODO: enforce this;
+        let is_limit_buy: bool = OrderType::LimitBuy == kind;
+
+        let v: &mut Vec<TimedOrder> = if is_limit_buy {
+            &mut self.ask
+        } else {
+            &mut self.bid
+        };
+
+        while order.quantity > 0 {
+            if let Some(cur) = v.first_mut() {
+                if (is_limit_buy && cur.order.price > order.price)
+                    || (!is_limit_buy && cur.order.price < order.price)
+                {
+                    break;
+                }
+                let t: usize = cur.order.quantity.min(order.quantity);
+                cur.order.quantity -= t;
+                order.quantity -= t;
+
+                if is_limit_buy {
+                    self._q -= t;
+                }
+
+                clients.push(Order {
+                    id: cur.order.id,
+                    sym: cur.order.sym.clone(),
+                    quantity: t,
+                    price: cur.order.price,
+                    kind: Some(kind),
+                });
+
+                if cur.order.quantity == 0 {
+                    i += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        v.drain(..i);
+
+        let _ = self.sig_tx.try_send(Arc::new(clients));
+        if order.quantity > 0 {
+            to.order.quantity = order.quantity;
+            binary_insert_by_cmp(v, to, |a, b| {
+                let cmp_price = if is_limit_buy {
+                    b.order.price.cmp(&a.order.price)
+                } else {
+                    a.order.price.cmp(&b.order.price)
+                };
+                cmp_price.then(a.dt.cmp(&b.dt))
+            });
+            return None;
+        }
+        Some(order)
     }
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
@@ -144,21 +144,21 @@ impl Security {
         let mut x: i64 = 0_i64;
         let mut i: usize = 0;
 
-        let mut clients = Vec::new();
+        let mut clients: Vec<Order> = Vec::new();
 
         while c > 0 {
             let Some(cur) = v.get_mut(i) else { break };
 
-            let take: usize = c.min(cur.order.quantity);
+            let t: usize = c.min(cur.order.quantity);
 
-            x += cur.order.price * (take as i64);
-            c -= take;
-            cur.order.quantity -= take;
+            x += cur.order.price * (t as i64);
+            c -= t;
+            cur.order.quantity -= t;
 
             clients.push(Order {
                 id: cur.order.id,
                 sym: order.sym.clone(),
-                quantity: take,
+                quantity: t,
                 price: cur.order.price,
                 kind: Some(kind),
             });
