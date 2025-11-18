@@ -84,6 +84,8 @@ impl Security {
                 {
                     break;
                 }
+                // TODO: must avg out the price across the orders
+                // to compute the avg price when signalling back limit order's client.
                 let t: usize = cur.order.quantity.min(order.quantity);
                 cur.order.quantity -= t;
                 order.quantity -= t;
@@ -96,7 +98,7 @@ impl Security {
                     id: cur.order.id,
                     sym: cur.order.sym.clone(),
                     quantity: t,
-                    price: cur.order.price, // TODO: double check what price it should be exchanged at, too fried to think rn
+                    price: cur.order.price,
                     kind: Some(kind),
                 });
 
