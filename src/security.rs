@@ -136,8 +136,8 @@ impl Security {
     }
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
-        let req_sz: usize = order.quantity;
-        if req_sz >= self._q {
+        let requested: usize = order.quantity;
+        if requested >= self._q {
             return None;
         }
 
@@ -149,19 +149,19 @@ impl Security {
             unreachable!();
         };
 
-        let mut c: usize = req_sz;
+        let mut left: usize = requested;
         let mut x: i64 = 0_i64;
         let mut i: usize = 0;
 
         let mut clients: Vec<Order> = Vec::new();
 
-        while c > 0 {
+        while left > 0 {
             let Some(cur) = v.get_mut(i) else { break };
 
-            let t: usize = c.min(cur.order.quantity);
+            let t: usize = left.min(cur.order.quantity);
 
             x += cur.order.price * (t as i64);
-            c -= t;
+            left -= t;
             cur.order.quantity -= t;
 
             clients.push(Order {
@@ -179,16 +179,16 @@ impl Security {
             }
         }
 
-        if c > 0 {
+        if left > 0 {
             return None;
         }
 
         // otherwise order was successful
         v.drain(..i);
         if kind == OrderType::MarketBuy {
-            self._q -= req_sz;
+            self._q -= requested;
         } else if kind == OrderType::MarketSell {
-            self._q += req_sz;
+            self._q += requested;
         }
 
         // signal to clients;
@@ -197,8 +197,8 @@ impl Security {
         Some(Order {
             id: order.id,
             sym: order.sym.clone(),
-            quantity: req_sz,
-            price: x / (req_sz as i64),
+            quantity: requested,
+            price: x / (requested as i64),
             kind: Some(kind),
         })
     }
