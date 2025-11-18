@@ -96,7 +96,7 @@ impl Security {
                     id: cur.order.id,
                     sym: cur.order.sym.clone(),
                     quantity: t,
-                    price: cur.order.price,
+                    price: cur.order.price, // TODO: double check what price it should be exchanged at, too fried to think rn
                     kind: Some(kind),
                 });
 
