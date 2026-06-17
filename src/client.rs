@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use futures_util::{StreamExt, pin_mut};
+use rand::prelude::*;
 use std::env;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
@@ -78,16 +79,53 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
     }
 }
 
+async fn random_spawn_orders(tx: mpsc::UnboundedSender<Message>) {
+    const TICKER_CHARSET: &[u8] = b"ABC";
+    const ACTIONS: &[u8] = b"bBsS";
+
+    let mut rng = rand::rng();
+
+    loop {
+        let action: char = ACTIONS[rng.random_range(0..ACTIONS.len())] as char;
+        let ticker: String = (0..3)
+            .map(|_| {
+                let i: usize = rng.random_range(0..TICKER_CHARSET.len());
+                TICKER_CHARSET[i] as char
+            })
+            .collect();
+
+        let quantity: String = rng.random_range(25..=250).to_string();
+
+        // TODO: sample a normal distribution around each ticker's market price.
+        let price: String = rng.random_range(150..=250).to_string();
+
+        let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
+
+        if let Some(order) = parse_order(&cmd) {
+            println!("VALID ORDER {:?}", order);
+
+            let bytes = Bytes::from(&order);
+            tx.send(Message::Binary(bytes)).unwrap();
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let url = env::args()
         .nth(1)
         .unwrap_or_else(|| panic!("requires >= one argument"));
 
+    let auto_client: bool = env::args().any(|a| a == "--auto");
+
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
-    tokio::spawn(read_stdin_orders(stdin_tx));
+    if auto_client {
+        tokio::spawn(random_spawn_orders(stdin_tx));
+    } else {
+        tokio::spawn(read_stdin_orders(stdin_tx));
+    }
 
     let (ws_stream, _) = connect_async(&url).await.expect("failed to connect");
     println!("websocket handshake success!");

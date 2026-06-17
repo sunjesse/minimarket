@@ -76,6 +76,7 @@ pub async fn conn_task(
     let (tx_ctrl, mut rx_ctrl) = mpsc::channel::<Message>(64);
     let (tx_data, mut rx_data) = mpsc::channel::<std::sync::Arc<Bytes>>(512);
 
+    // this is client id
     let id = Uuid::new_v4();
 
     hub.register(
