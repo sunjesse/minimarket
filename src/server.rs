@@ -11,7 +11,6 @@ async fn sequencer(
     tx: mpsc::Sender<TimedOrder>, // -> matcher
 ) {
     while let Some(ord) = rx.recv().await {
-        //println!("[sequencer] {:?}", ord);
         let to = TimedOrder::new(ord);
         if tx.send(to).await.is_err() {
             eprintln!("ERROR'd sending from SEQ -> MAT");
@@ -32,7 +31,7 @@ async fn matcher(
             exchange_arc.add_order(to)
         })
         .await;
-        println!("done {:?}", s);
+        println!("[matcher] done {:?}", s);
     }
 }
 
@@ -47,8 +46,6 @@ async fn main() -> Result<(), IoError> {
     let addr: String = env::args()
         .nth(1)
         .unwrap_or_else(|| "0.0.0.0:8080".to_string());
-
-    let auto_client: bool = args.iter().any(|a| a == "--auto");
 
     let hub: Arc<Hub> = Hub::new();
 
