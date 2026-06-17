@@ -1,13 +1,15 @@
 use bytes::Bytes;
+use dashmap::DashMap;
 use futures_util::{StreamExt, pin_mut};
 use rand::prelude::*;
-use std::env;
+use rand_distr::Normal;
+use std::{env, sync::Arc};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use minimarket::{Frame, Order, OrderType, Symbol};
+use minimarket::{Frame, Order, OrderType, SecPriceVec, Symbol};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -79,7 +81,10 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
     }
 }
 
-async fn random_spawn_orders(tx: mpsc::UnboundedSender<Message>) {
+async fn random_spawn_orders(
+    tx: mpsc::UnboundedSender<Message>,
+    current_prices: Arc<DashMap<Symbol, i64>>,
+) {
     const TICKER_CHARSET: &[u8] = b"ABC";
     const ACTIONS: &[u8] = b"bBsS";
 
@@ -95,15 +100,22 @@ async fn random_spawn_orders(tx: mpsc::UnboundedSender<Message>) {
             .collect();
 
         let quantity: String = rng.random_range(25..=250).to_string();
+        let sym = Symbol(Arc::from(ticker.clone()));
 
-        // TODO: sample a normal distribution around each ticker's market price.
-        let price: String = rng.random_range(150..=250).to_string();
+        let noise = Normal::new(0.0, 2.0).unwrap();
+
+        // TODO: better logic for initial price
+        let cp = if let Some(p) = current_prices.get(&sym) {
+            *p
+        } else {
+            150
+        };
+        let price = cp + (noise.sample(&mut rng) as i64);
 
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
         if let Some(order) = parse_order(&cmd) {
-            println!("VALID ORDER {:?}", order);
-
+            println!("[client] submitting order {:?}", order);
             let bytes = Bytes::from(&order);
             tx.send(Message::Binary(bytes)).unwrap();
         }
@@ -121,8 +133,10 @@ async fn main() {
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
+    let current_prices: Arc<DashMap<Symbol, i64>> = Arc::new(DashMap::new());
+
     if auto_client {
-        tokio::spawn(random_spawn_orders(stdin_tx));
+        tokio::spawn(random_spawn_orders(stdin_tx, current_prices.clone()));
     } else {
         tokio::spawn(read_stdin_orders(stdin_tx));
     }
@@ -133,12 +147,19 @@ async fn main() {
     let (write, read) = ws_stream.split();
 
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
+
     let ws_to_stdout = {
         read.for_each(|message| async {
             match message {
-                Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data) {
+                Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data)
+                {
                     Ok(Frame::Order(o)) => println!("received {:?}", o),
-                    Ok(Frame::Prices(p)) => println!("prices: {:?}", p),
+                    Ok(Frame::Prices(spv)) => {
+                        for sp in spv.prices.iter() {
+                            current_prices
+                                .insert(sp.sym.clone(), sp.price.unwrap_or_else(|| 0));
+                        }
+                    }
                     Err(_) => {}
                 },
                 Err(_) => {}

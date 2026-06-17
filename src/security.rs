@@ -216,13 +216,13 @@ impl Exchange {
     }
 
     pub fn add_order(&self, to: TimedOrder) -> Option<Order> {
-        let mut entry = self
-            .securities
-            .entry(to.order.sym.clone())
-            .or_insert(Security::new(
-                to.order.sym.clone(),
-                self.broadcast_tx.clone(),
-            ));
+        let mut entry =
+            self.securities
+                .entry(to.order.sym.clone())
+                .or_insert(Security::new(
+                    to.order.sym.clone(),
+                    self.broadcast_tx.clone(),
+                ));
 
         let sec = entry.value_mut();
 
@@ -245,15 +245,15 @@ impl Exchange {
                 SecPrice::new(k, v)
             })
             .collect();
-        SecPriceVec(v)
+        SecPriceVec { prices: v }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SecPrice {
-    sym: Symbol,
-    price: Option<i64>,
-    dt: SystemTime,
+    pub sym: Symbol,
+    pub price: Option<i64>,
+    pub dt: SystemTime,
 }
 
 impl SecPrice {
@@ -280,58 +280,53 @@ impl From<&SecPrice> for Bytes {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SecPriceVec(pub Vec<SecPrice>);
+pub struct SecPriceVec {
+    pub prices: Vec<SecPrice>,
+}
 
 impl SecPriceVec {
+    pub const MAX_LEN: usize = 25;
+
     pub fn new(v: Vec<(Symbol, Option<i64>)>) -> Self {
-        Self(v.into_iter().map(|(s, p)| SecPrice::new(s, p)).collect())
-    }
-}
+        // TODO: assuming v is sorted chronologically increasing already.
+        let skip: usize = v.len().saturating_sub(Self::MAX_LEN);
 
-impl From<&Bytes> for SecPriceVec {
-    fn from(b: &Bytes) -> Self {
-        bincode::deserialize(b).expect("deserialize")
-    }
-}
+        let prices: Vec<SecPrice> = v
+            .into_iter()
+            .skip(skip)
+            .map(|(s, p)| SecPrice::new(s, p))
+            .collect();
 
-impl From<&SecPriceVec> for Bytes {
-    fn from(v: &SecPriceVec) -> Self {
-        Bytes::from(bincode::serialize(v).expect("serialize"))
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct SecPriceSeries {
-    _t: DashMap<Symbol, Vec<SecPrice>>,
-}
-
-impl SecPriceSeries {
-    pub fn new() -> Self {
-        Self { _t: DashMap::new() }
+        Self { prices }
     }
 
     pub fn add_price(&mut self, sp: SecPrice) {
-        if let Some(mut v) = self._t.get_mut(&sp.sym) {
-            binary_insert_by_cmp(&mut v, sp, |a, b| a.dt.cmp(&b.dt));
+        if self.prices.len() > Self::MAX_LEN {
+            let start: usize = self.prices.len() - Self::MAX_LEN;
+            self.prices.drain(..start);
         }
+
+        binary_insert_by_cmp(&mut self.prices, sp, |a, b| a.dt.cmp(&b.dt));
     }
 
-    // TODO: clearly there is some consolidating we can do to have less repetition among
-    // the .mean(..) and .variance(..) methods.
+    pub fn get_most_recent_price(&self) -> Option<i64> {
+        if let Some(last) = self.prices.last() {
+            return last.price;
+        }
+        None
+    }
 
-    // TODO #2: Moreover, should we be returning Option<f64>? can expect to get
+    // TODO #1: Moreover, should we be returning Option<f64>? can expect to get
     // floating point numbers from these calculations.
-    pub fn mean(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
+    pub fn mean(&self, start: SystemTime, end: SystemTime) -> Option<i64> {
         if start > end {
             eprintln!("start time cannot be after end");
             return None;
         }
-        // TODO: optimize
-        if let Some(v) = self._t.get(&sym)
-            && let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
-            && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+        if let Ok(s) = self.prices.binary_search_by(|x| x.dt.cmp(&start))
+            && let Ok(e) = self.prices.binary_search_by(|x| x.dt.cmp(&end))
         {
-            let r: i64 = v[s..=e]
+            let r: i64 = self.prices[s..=e]
                 .iter()
                 .map(|x| x.price.unwrap_or_default())
                 .sum::<i64>()
@@ -342,14 +337,13 @@ impl SecPriceSeries {
         None
     }
 
-    pub fn variance(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
-        let mu = self.mean(sym.clone(), start, end)?;
+    pub fn variance(&self, start: SystemTime, end: SystemTime) -> Option<i64> {
+        let mu = self.mean(start, end)?;
 
-        if let Some(v) = self._t.get(&sym)
-            && let Ok(s) = v.binary_search_by(|x| x.dt.cmp(&start))
-            && let Ok(e) = v.binary_search_by(|x| x.dt.cmp(&end))
+        if let Ok(s) = self.prices.binary_search_by(|x| x.dt.cmp(&start))
+            && let Ok(e) = self.prices.binary_search_by(|x| x.dt.cmp(&end))
         {
-            let r: i64 = v[s..=e]
+            let r: i64 = self.prices[s..=e]
                 .iter()
                 .map(|x| if let Some(p) = x.price { p * p } else { 0_i64 })
                 .sum::<i64>()
@@ -362,8 +356,20 @@ impl SecPriceSeries {
         None
     }
 
-    pub fn std_deviation(&self, sym: Symbol, start: SystemTime, end: SystemTime) -> Option<i64> {
-        let var = self.variance(sym.clone(), start, end)?;
+    pub fn std_deviation(&self, start: SystemTime, end: SystemTime) -> Option<i64> {
+        let var = self.variance(start, end)?;
         Some(var.isqrt()) // TODO: currently returns value rounded down as it's all i64
+    }
+}
+
+impl From<&Bytes> for SecPriceVec {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize(b).expect("deserialize")
+    }
+}
+
+impl From<&SecPriceVec> for Bytes {
+    fn from(v: &SecPriceVec) -> Self {
+        Bytes::from(bincode::serialize(v).expect("serialize"))
     }
 }
