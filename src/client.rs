@@ -116,11 +116,16 @@ async fn main() {
         .nth(1)
         .unwrap_or_else(|| panic!("requires >= one argument"));
 
+    let auto_client: bool = env::args().any(|a| a == "--auto");
+
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
-    //tokio::spawn(read_stdin_orders(stdin_tx));
-    tokio::spawn(random_spawn_orders(stdin_tx));
+    if auto_client {
+        tokio::spawn(random_spawn_orders(stdin_tx));
+    } else {
+        tokio::spawn(read_stdin_orders(stdin_tx));
+    }
 
     let (ws_stream, _) = connect_async(&url).await.expect("failed to connect");
     println!("websocket handshake success!");

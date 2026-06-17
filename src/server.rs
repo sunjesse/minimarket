@@ -29,7 +29,7 @@ async fn matcher(
         let exchange_arc = Arc::clone(&exchange);
         let s = rayon_await(pool.clone(), move || {
             println!("[matcher] processing order {:?}", to);
-            exchange_arc.add_order(to);
+            exchange_arc.add_order(to)
         })
         .await;
         println!("done {:?}", s);
@@ -47,6 +47,8 @@ async fn main() -> Result<(), IoError> {
     let addr: String = env::args()
         .nth(1)
         .unwrap_or_else(|| "0.0.0.0:8080".to_string());
+
+    let auto_client: bool = args.iter().any(|a| a == "--auto");
 
     let hub: Arc<Hub> = Hub::new();
 

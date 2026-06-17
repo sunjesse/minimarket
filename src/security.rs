@@ -100,10 +100,6 @@ impl Security {
                 cur.order.quantity -= t;
                 order.quantity -= t;
 
-                println!(
-                    "t {} cur {} order {}",
-                    t, cur.order.quantity, order.quantity
-                );
                 clients.push(Order {
                     id: cur.order.id,
                     sym: cur.order.sym.clone(),
