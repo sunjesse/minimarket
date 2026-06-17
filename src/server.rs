@@ -11,6 +11,7 @@ async fn sequencer(
     tx: mpsc::Sender<TimedOrder>, // -> matcher
 ) {
     while let Some(ord) = rx.recv().await {
+        //println!("[sequencer] {:?}", ord);
         let to = TimedOrder::new(ord);
         if tx.send(to).await.is_err() {
             eprintln!("ERROR'd sending from SEQ -> MAT");
@@ -27,7 +28,7 @@ async fn matcher(
     while let Some(to) = rx.recv().await {
         let exchange_arc = Arc::clone(&exchange);
         let s = rayon_await(pool.clone(), move || {
-            println!("ORDER IS {:?}", to);
+            println!("[matcher] processing order {:?}", to);
             exchange_arc.add_order(to);
         })
         .await;
@@ -56,9 +57,12 @@ async fn main() -> Result<(), IoError> {
     let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
     let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
 
+    let ncpus = num_cpus::get_physical();
+    println!("num cpus: {}", ncpus);
+
     let pool = Arc::new(
         ThreadPoolBuilder::new()
-            .num_threads(num_cpus::get_physical() - 1) // save one for tokio
+            .num_threads(ncpus - 1) // save one for tokio
             .thread_name(|i| format!("thread-{}", i))
             .build()
             .unwrap(),

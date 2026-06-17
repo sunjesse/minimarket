@@ -11,7 +11,6 @@ use crate::utils::binary_insert_by_cmp;
 #[derive(Debug)]
 pub struct Security {
     _id: Uuid,
-    _q: usize,            // materalized quantity of pending sell orders
     bid: Vec<TimedOrder>, // sorted desc
     ask: Vec<TimedOrder>, // sorted asc
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
@@ -24,7 +23,6 @@ impl Security {
     pub fn new<S: Into<Symbol>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             _id: Uuid::new_v4(),
-            _q: 0,
             bid: Vec::new(),
             ask: Vec::new(),
             sig_tx,
@@ -62,6 +60,10 @@ impl Security {
         None
     }
 
+    fn get_q(&self) -> usize {
+        self.ask.iter().map(|o| o.order.quantity).sum::<usize>()
+    }
+
     fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
         // CORRECTNESS: assume kind is ony limitbuy or limitsell
         // we assume this is satisfied by the caller for now.
@@ -91,14 +93,17 @@ impl Security {
                 // TODO: must avg out the price across the orders
                 // to compute the avg price when signalling back limit order's client.
                 let t: usize = cur.order.quantity.min(order.quantity);
+                if t == 0 {
+                    break;
+                }
                 total_cost += (t as i64) * cur.order.price;
                 cur.order.quantity -= t;
                 order.quantity -= t;
 
-                if is_limit_buy {
-                    self._q -= t;
-                }
-
+                println!(
+                    "t {} cur {} order {}",
+                    t, cur.order.quantity, order.quantity
+                );
                 clients.push(Order {
                     id: cur.order.id,
                     sym: cur.order.sym.clone(),
@@ -112,6 +117,8 @@ impl Security {
                 } else {
                     break;
                 }
+            } else {
+                break;
             }
         }
 
@@ -137,7 +144,7 @@ impl Security {
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
         let requested: usize = order.quantity;
-        if requested >= self._q {
+        if requested > self.get_q() {
             return None;
         }
 
@@ -185,11 +192,6 @@ impl Security {
 
         // otherwise order was successful
         v.drain(..i);
-        if kind == OrderType::MarketBuy {
-            self._q -= requested;
-        } else if kind == OrderType::MarketSell {
-            self._q += requested;
-        }
 
         // signal to clients;
         let _ = self.sig_tx.try_send(Arc::new(clients));
