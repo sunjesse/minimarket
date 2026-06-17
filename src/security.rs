@@ -285,27 +285,17 @@ pub struct SecPriceVec {
 }
 
 impl SecPriceVec {
-    pub const MAX_LEN: usize = 25;
-
     pub fn new(v: Vec<(Symbol, Option<i64>)>) -> Self {
         // TODO: assuming v is sorted chronologically increasing already.
-        let skip: usize = v.len().saturating_sub(Self::MAX_LEN);
-
-        let prices: Vec<SecPrice> = v
-            .into_iter()
-            .skip(skip)
-            .map(|(s, p)| SecPrice::new(s, p))
-            .collect();
+        let prices: Vec<SecPrice> =
+            v.into_iter().map(|(s, p)| SecPrice::new(s, p)).collect();
 
         Self { prices }
     }
 
+    // TODO: These methods should be used for symbol -> time-series.
+    // Current, SecPriceVec only holds a current price per symbol.
     pub fn add_price(&mut self, sp: SecPrice) {
-        if self.prices.len() > Self::MAX_LEN {
-            let start: usize = self.prices.len() - Self::MAX_LEN;
-            self.prices.drain(..start);
-        }
-
         binary_insert_by_cmp(&mut self.prices, sp, |a, b| a.dt.cmp(&b.dt));
     }
 
