@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-use minimarket::{Frame, Order, OrderType, SecPriceVec, Symbol};
+use minimarket::{Frame, Order, OrderType, Symbol};
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -89,6 +89,7 @@ async fn random_spawn_orders(
     const ACTIONS: &[u8] = b"bBsS";
 
     let mut rng = rand::rng();
+    let price_noise = Normal::new(0.0, 2.0).unwrap();
 
     loop {
         let action: char = ACTIONS[rng.random_range(0..ACTIONS.len())] as char;
@@ -102,15 +103,13 @@ async fn random_spawn_orders(
         let quantity: String = rng.random_range(25..=250).to_string();
         let sym = Symbol(Arc::from(ticker.clone()));
 
-        let noise = Normal::new(0.0, 2.0).unwrap();
-
         // TODO: better logic for initial price
         let cp = if let Some(p) = current_prices.get(&sym) {
             *p
         } else {
             150
         };
-        let price = cp + (noise.sample(&mut rng) as i64);
+        let price = cp + (price_noise.sample(&mut rng) as i64);
 
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
