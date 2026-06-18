@@ -100,7 +100,7 @@ async fn random_spawn_orders(
             })
             .collect();
 
-        let quantity: String = rng.random_range(25..=250).to_string();
+        let quantity = rng.random_range(25..=250);
         let sym = Symbol(Arc::from(ticker.clone()));
 
         // TODO: better logic for initial price
