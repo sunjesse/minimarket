@@ -1,13 +1,17 @@
 use bytes::Bytes;
+use dashmap::DashMap;
 use futures_util::{StreamExt, pin_mut};
 use rand::prelude::*;
-use std::env;
+use rand_distr::Normal;
+use std::{env, sync::Arc, time::SystemTime};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use minimarket::{Frame, Order, OrderType, Symbol};
+
+type PriceTime = (i64, SystemTime);
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -34,7 +38,6 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
-    println!("{:?}: {:?} shares @ {:?}", sym, quantity, price);
     Some(Order {
         id: None,
         sym: Symbol(sym.into()),
@@ -79,11 +82,15 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
     }
 }
 
-async fn random_spawn_orders(tx: mpsc::UnboundedSender<Message>) {
+async fn random_spawn_orders(
+    tx: mpsc::UnboundedSender<Message>,
+    market_prices: Arc<DashMap<Symbol, PriceTime>>,
+) {
     const TICKER_CHARSET: &[u8] = b"ABC";
     const ACTIONS: &[u8] = b"bBsS";
 
     let mut rng = rand::rng();
+    let price_noise = Normal::new(0.0, 2.0).unwrap();
 
     loop {
         let action: char = ACTIONS[rng.random_range(0..ACTIONS.len())] as char;
@@ -94,16 +101,22 @@ async fn random_spawn_orders(tx: mpsc::UnboundedSender<Message>) {
             })
             .collect();
 
-        let quantity: String = rng.random_range(25..=250).to_string();
+        let quantity = rng.random_range(25..=250);
+        let sym = Symbol(Arc::from(ticker.clone()));
 
-        // TODO: sample a normal distribution around each ticker's market price.
-        let price: String = rng.random_range(150..=250).to_string();
+        // TODO: better logic for initial price
+        // Magic number for now.
+        let cp = if let Some(pt) = market_prices.get(&sym) {
+            (*pt).0
+        } else {
+            150
+        };
+        let price = cp + (price_noise.sample(&mut rng) as i64);
 
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
         if let Some(order) = parse_order(&cmd) {
-            println!("VALID ORDER {:?}", order);
-
+            println!("[client] submitting order {:?}", order);
             let bytes = Bytes::from(&order);
             tx.send(Message::Binary(bytes)).unwrap();
         }
@@ -121,8 +134,10 @@ async fn main() {
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
+    let market_prices: Arc<DashMap<Symbol, PriceTime>> = Arc::new(DashMap::new());
+
     if auto_client {
-        tokio::spawn(random_spawn_orders(stdin_tx));
+        tokio::spawn(random_spawn_orders(stdin_tx, market_prices.clone()));
     } else {
         tokio::spawn(read_stdin_orders(stdin_tx));
     }
@@ -133,12 +148,21 @@ async fn main() {
     let (write, read) = ws_stream.split();
 
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
+
     let ws_to_stdout = {
         read.for_each(|message| async {
             match message {
-                Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data) {
+                Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data)
+                {
                     Ok(Frame::Order(o)) => println!("received {:?}", o),
-                    Ok(Frame::Prices(p)) => println!("prices: {:?}", p),
+                    Ok(Frame::Prices(spv)) => {
+                        for sp in spv.prices.iter() {
+                            if let Some(p) = sp.price {
+                                let pt: PriceTime = (p, sp.dt);
+                                market_prices.insert(sp.sym.clone(), pt);
+                            }
+                        }
+                    }
                     Err(_) => {}
                 },
                 Err(_) => {}

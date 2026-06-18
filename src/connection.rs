@@ -147,7 +147,7 @@ pub async fn conn_task(
     let price_task = {
         let hub = hub.clone();
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
             loop {
                 interval.tick().await;
                 let prices = Arc::new(Bytes::from(&Frame::Prices(
