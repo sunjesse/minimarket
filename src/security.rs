@@ -163,6 +163,9 @@ impl Security {
 
             let t: usize = left.min(cur.order.quantity);
 
+            if t == 0 {
+                break;
+            }
             x += cur.order.price * (t as i64);
             left -= t;
             cur.order.quantity -= t;

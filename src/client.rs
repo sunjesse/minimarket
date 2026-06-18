@@ -3,13 +3,15 @@ use dashmap::DashMap;
 use futures_util::{StreamExt, pin_mut};
 use rand::prelude::*;
 use rand_distr::Normal;
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::SystemTime};
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use minimarket::{Frame, Order, OrderType, Symbol};
+
+type PriceTime = (i64, SystemTime);
 
 fn parse_order(input: &str) -> Option<Order> {
     let input = input.trim();
@@ -36,7 +38,6 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
-    println!("{:?}: {:?} shares @ {:?}", sym, quantity, price);
     Some(Order {
         id: None,
         sym: Symbol(sym.into()),
@@ -83,7 +84,7 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
 
 async fn random_spawn_orders(
     tx: mpsc::UnboundedSender<Message>,
-    current_prices: Arc<DashMap<Symbol, i64>>,
+    market_prices: Arc<DashMap<Symbol, PriceTime>>,
 ) {
     const TICKER_CHARSET: &[u8] = b"ABC";
     const ACTIONS: &[u8] = b"bBsS";
@@ -104,8 +105,9 @@ async fn random_spawn_orders(
         let sym = Symbol(Arc::from(ticker.clone()));
 
         // TODO: better logic for initial price
-        let cp = if let Some(p) = current_prices.get(&sym) {
-            *p
+        // Magic number for now.
+        let cp = if let Some(pt) = market_prices.get(&sym) {
+            (*pt).0
         } else {
             150
         };
@@ -132,10 +134,10 @@ async fn main() {
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let stdin_rx = UnboundedReceiverStream::new(stdin_rx);
 
-    let current_prices: Arc<DashMap<Symbol, i64>> = Arc::new(DashMap::new());
+    let market_prices: Arc<DashMap<Symbol, PriceTime>> = Arc::new(DashMap::new());
 
     if auto_client {
-        tokio::spawn(random_spawn_orders(stdin_tx, current_prices.clone()));
+        tokio::spawn(random_spawn_orders(stdin_tx, market_prices.clone()));
     } else {
         tokio::spawn(read_stdin_orders(stdin_tx));
     }
@@ -155,8 +157,10 @@ async fn main() {
                     Ok(Frame::Order(o)) => println!("received {:?}", o),
                     Ok(Frame::Prices(spv)) => {
                         for sp in spv.prices.iter() {
-                            current_prices
-                                .insert(sp.sym.clone(), sp.price.unwrap_or_else(|| 0));
+                            if let Some(p) = sp.price {
+                                let pt: PriceTime = (p, sp.dt);
+                                market_prices.insert(sp.sym.clone(), pt);
+                            }
                         }
                     }
                     Err(_) => {}
