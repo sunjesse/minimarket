@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering};
+use std::cmp::Ordering;
 
 use crate::{Order, SecPriceVec};
 
