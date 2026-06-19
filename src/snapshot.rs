@@ -33,7 +33,9 @@ impl SnapshotJob {
 
         file.write_all(&len_bytes)?;
         file.write_all(&encoded)?;
-        file.flush()?;
+
+        // force a fsync syscall to ensure integrity
+        file.sync_all()?;
         Ok(())
     }
 
