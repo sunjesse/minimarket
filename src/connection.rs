@@ -2,7 +2,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
@@ -63,6 +63,8 @@ impl Hub {
     }
 }
 
+const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub async fn conn_task(
     hub: Arc<Hub>,
     seq_tx: mpsc::Sender<Order>,
@@ -76,10 +78,10 @@ pub async fn conn_task(
     let (tx_data, mut rx_data) = mpsc::channel::<std::sync::Arc<Bytes>>(512);
 
     // this is client id
-    let id = Uuid::new_v4();
+    let client_id = Uuid::new_v4();
 
     hub.register(
-        id,
+        client_id,
         Conn {
             ctrl: tx_ctrl.clone(),
             data: tx_data.clone(),
@@ -88,7 +90,7 @@ pub async fn conn_task(
 
     let (mut sink, mut source) = ws.split();
 
-    let writer = tokio::spawn(async move {
+    let mut writer = tokio::spawn(async move {
         let mut ping = tokio::time::interval(std::time::Duration::from_secs(10));
         loop {
             tokio::select! {
@@ -106,36 +108,36 @@ pub async fn conn_task(
         let _ = sink.close().await;
     });
 
-    let reader = {
+    let mut reader = {
         let hub = hub.clone();
         tokio::spawn(async move {
-            let mut last_pong = std::time::Instant::now();
-            while let Some(msg) = source.next().await {
-                match msg {
-                    Ok(Message::Text(txt)) => {
-                        println!("received {:?}", txt)
-                    }
-                    Ok(Message::Binary(b)) => {
-                        let mut ord: Order = Order::from(&b);
-                        ord.id = Some(id); // TODO: figure out how to not need this later.
-                        if let Err(e) = seq_tx.send(ord).await {
-                            eprintln!("[connection] Errored with {}", e);
-                            break;
+            let mut last_pong = tokio::time::Instant::now();
+            loop {
+                // race incoming frames against a heartbeat timer
+                tokio::select! {
+                    frame = source.next() => {
+                        let Some(Ok(msg)) = frame else { break; };
+                        match msg {
+                            Message::Binary(b) => {
+                                // TODO: this currently assumes b is valid order, else panics.
+                                let mut ord = Order::from(&b);
+                                ord.id = Some(client_id);
+                                if let Err(e) = seq_tx.send(ord).await {
+                                    eprintln!("[connection] Errored with {}", e);
+                                    break;
+                                }
+                            }
+                            Message::Pong(_) => {
+                                last_pong = tokio::time::Instant::now();
+                            }
+                            Message::Ping(p) => {
+                                let _ = hub.send_ctrl(&client_id, Message::Pong(p)).await;
+                            }
+                            Message::Close(_) => break,
+                            _ => {}
                         }
                     }
-                    Ok(Message::Pong(_)) => {
-                        println!("[{:?}] ponged", addr);
-                        last_pong = std::time::Instant::now();
-                    }
-                    Ok(Message::Ping(p)) => {
-                        println!("[{:?}] pinged {:?}", addr, p);
-                        let _ = hub.send_ctrl(&id, Message::Pong(p)).await;
-                    }
-                    Ok(Message::Close(_)) | Err(_) => break,
-                    _ => {}
-                }
-                if last_pong.elapsed() > std::time::Duration::from_secs(60) {
-                    break;
+                    _ = tokio::time::sleep_until(last_pong + HEARTBEAT_TIMEOUT) => break,
                 }
             }
         })
@@ -147,7 +149,7 @@ pub async fn conn_task(
         _ = &mut reader => { writer.abort(); }
     }
 
-    hub.unregister(&id);
+    hub.unregister(&client_id);
     println!("[{:?}] disconnected", addr);
     Ok(())
 }
