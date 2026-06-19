@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
-                let sec_prices = list_all_security_prices(global_prices.clone());
+                let sec_prices = list_all_security_prices(&global_prices);
                 let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
                 hub.broadcast(prices);
 

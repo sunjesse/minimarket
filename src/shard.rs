@@ -75,7 +75,7 @@ pub fn shard_for(symbol: &Symbol, n: usize) -> usize {
 }
 
 pub fn list_all_security_prices(
-    global_prices: Arc<DashMap<Symbol, SecPrice>>,
+    global_prices: &DashMap<Symbol, SecPrice>,
 ) -> SecPriceVec {
     let p: Vec<SecPrice> = global_prices.iter().map(|kv| kv.value().clone()).collect();
     SecPriceVec { prices: p }
