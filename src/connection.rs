@@ -141,7 +141,12 @@ pub async fn conn_task(
         })
     };
 
-    tokio::select! { _ = writer => {}, _ = reader => {} }
+    // abort the other task if one task fails to avoid accumulating zombie tasks
+    tokio::select! {
+        _ = &mut writer => { reader.abort(); }
+        _ = &mut reader => { writer.abort(); }
+    }
+
     hub.unregister(&id);
     println!("[{:?}] disconnected", addr);
     Ok(())
