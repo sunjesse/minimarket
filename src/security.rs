@@ -59,8 +59,15 @@ impl Security {
         None
     }
 
-    fn get_q(&self) -> usize {
-        self.ask.iter().map(|o| o.order.quantity).sum::<usize>()
+    fn get_q(&self, kind: &OrderType) -> usize {
+        let v = if *kind == OrderType::MarketBuy {
+            &self.ask
+        } else if *kind == OrderType::MarketSell {
+            &self.bid
+        } else {
+            unreachable!()
+        };
+        v.iter().map(|o| o.order.quantity).sum::<usize>()
     }
 
     fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
@@ -83,7 +90,7 @@ impl Security {
         };
 
         while order.quantity > 0 {
-            if let Some(cur) = v.first_mut() {
+            if let Some(cur) = v.get_mut(i) {
                 if (is_limit_buy && cur.order.price > order.price)
                     || (!is_limit_buy && cur.order.price < order.price)
                 {
@@ -139,7 +146,7 @@ impl Security {
 
     fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
         let requested: usize = order.quantity;
-        if requested > self.get_q() {
+        if requested > self.get_q(&kind) {
             return None;
         }
 
