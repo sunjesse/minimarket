@@ -118,8 +118,8 @@ pub async fn conn_task(
                     Ok(Message::Binary(b)) => {
                         let mut ord: Order = Order::from(&b);
                         ord.id = Some(id); // TODO: figure out how to not need this later.
-                        if seq_tx.send(ord).await.is_err() {
-                            eprintln!("ERROR");
+                        if let Err(e) = seq_tx.send(ord).await {
+                            eprintln!("[connection] Errored with {}", e);
                             break;
                         }
                     }
