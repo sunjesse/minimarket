@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bytes::Bytes;
 use rayon::ThreadPoolBuilder;
 use std::{env, io::Error as IoError, sync::Arc};
 use tokio::{net::TcpListener, sync::mpsc};
@@ -61,7 +62,7 @@ async fn main() -> Result<(), IoError> {
 
     let pool = Arc::new(
         ThreadPoolBuilder::new()
-            .num_threads(ncpus - 1) // save one for tokio
+            .num_threads((ncpus - 1).max(1)) // save one for tokio
             .thread_name(|i| format!("thread-{}", i))
             .build()
             .unwrap(),
@@ -73,14 +74,49 @@ async fn main() -> Result<(), IoError> {
     tokio::spawn(matcher(hub.clone(), pool.clone(), mat_rx, exchange.clone()));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
+    // current market prices broadcaster task
+    {
+        let hub = hub.clone();
+        let exchange = exchange.clone();
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(10));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let sec_prices = exchange.list_all_security_prices();
+                let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices)));
+                hub.broadcast(prices);
+            }
+        });
+    }
+
+    // snapshot job
+    let snapshot = Arc::new(SnapshotJob::new());
+    {
+        let snapshot = snapshot.clone();
+        let exchange = exchange.clone();
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(10));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                let sec_prices = exchange.list_all_security_prices();
+                let snapshot = snapshot.clone();
+                match tokio::task::spawn_blocking(move || snapshot.save(sec_prices))
+                    .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => eprintln!("snapshot save failed {:?}", e),
+                    Err(e) => eprintln!("snapshot save panicked {:?}", e),
+                }
+            }
+        });
+    }
+
     while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(conn_task(
-            hub.clone(),
-            exchange.clone(),
-            seq_tx.clone(),
-            stream,
-            addr,
-        ));
+        tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
     }
 
     Ok(())

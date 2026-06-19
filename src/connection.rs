@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{Exchange, Frame, Order};
+use crate::{Frame, Order};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -65,7 +65,6 @@ impl Hub {
 
 pub async fn conn_task(
     hub: Arc<Hub>,
-    exchange: Arc<Exchange>,
     seq_tx: mpsc::Sender<Order>,
     stream: TcpStream,
     addr: SocketAddr,
@@ -142,23 +141,7 @@ pub async fn conn_task(
         })
     };
 
-    // simply broadcasts the current market prices every 10 seconds to each client.
-    let exchange = exchange.clone();
-    let price_task = {
-        let hub = hub.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
-            loop {
-                interval.tick().await;
-                let prices = Arc::new(Bytes::from(&Frame::Prices(
-                    exchange.list_all_security_prices(),
-                )));
-                hub.broadcast(prices.clone());
-            }
-        })
-    };
-
-    tokio::select! { _ = writer => {}, _ = reader => {}, _ = price_task => {} }
+    tokio::select! { _ = writer => {}, _ = reader => {} }
     hub.unregister(&id);
     println!("[{:?}] disconnected", addr);
     Ok(())
