@@ -91,6 +91,10 @@ async fn random_spawn_orders(
 
     let mut rng = rand::rng();
     let price_noise = Normal::new(0.0, 2.0).unwrap();
+    let mut c: usize = 0;
+    const BATCHSIZE: usize = 10_000;
+
+    let start = std::time::Instant::now();
 
     loop {
         let action: char = ACTIONS[rng.random_range(0..ACTIONS.len())] as char;
@@ -116,7 +120,12 @@ async fn random_spawn_orders(
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
         if let Some(order) = parse_order(&cmd) {
-            println!("[client] submitting order {:?}", order);
+            //println!("[client] submitting order {:?}", order);
+            c += 1;
+            if c % BATCHSIZE == 0 {
+                c = 0;
+                println!("ts: {:?} - submitted {BATCHSIZE} orders", start.elapsed());
+            }
             let bytes = Bytes::from(&order);
             tx.send(Message::Binary(bytes)).unwrap();
         }
@@ -154,7 +163,7 @@ async fn main() {
             match message {
                 Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data)
                 {
-                    Ok(Frame::Order(o)) => println!("received {:?}", o),
+                    Ok(Frame::Order(_)) => {} //println!("received {:?}", o),
                     Ok(Frame::Prices(spv)) => {
                         for sp in spv.prices.iter() {
                             if let Some(p) = sp.price {

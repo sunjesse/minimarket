@@ -70,7 +70,8 @@ impl Shard {
 pub fn shard_for(symbol: &Symbol, n: usize) -> usize {
     let mut h = DefaultHasher::new();
     symbol.hash(&mut h);
-    (h.finish() % n as u64) as usize
+    let u = (h.finish() % n as u64) as usize;
+    u
 }
 
 pub fn list_all_security_prices(

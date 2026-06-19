@@ -68,9 +68,11 @@ async fn main() -> Result<()> {
     tokio::spawn(matcher(mat_rx, shards));
     tokio::spawn(broadcaster(hub.clone(), bc_rx));
 
-    // current market prices broadcaster task
+    // current market prices broadcaster + snapshot task
+    let snapshot = Arc::new(SnapshotJob::new());
     {
         let hub = hub.clone();
+        let snapshot = snapshot.clone();
         tokio::spawn(async move {
             let mut interval =
                 tokio::time::interval(std::time::Duration::from_secs(10));
@@ -78,25 +80,9 @@ async fn main() -> Result<()> {
             loop {
                 interval.tick().await;
                 let sec_prices = list_all_security_prices(global_prices.clone());
-                let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices)));
+                let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
                 hub.broadcast(prices);
-            }
-        });
-    }
 
-    /*
-    // snapshot job
-    let snapshot = Arc::new(SnapshotJob::new());
-    {
-        let snapshot = snapshot.clone();
-        let exchange = exchange.clone();
-        tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(std::time::Duration::from_secs(10));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                interval.tick().await;
-                let sec_prices = exchange.list_all_security_prices();
                 let snapshot = snapshot.clone();
                 match tokio::task::spawn_blocking(move || snapshot.save(sec_prices))
                     .await
@@ -108,7 +94,6 @@ async fn main() -> Result<()> {
             }
         });
     }
-    */
 
     loop {
         match listener.accept().await {
