@@ -1,20 +1,8 @@
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, sync::Arc};
-use tokio::sync::oneshot;
+use std::{cmp::Ordering};
 
 use crate::{Order, SecPriceVec};
-
-pub async fn rayon_await<T: Send + 'static>(
-    pool: Arc<rayon::ThreadPool>,
-    f: impl FnOnce() -> T + Send + 'static,
-) -> T {
-    let (tx, rx) = oneshot::channel();
-    pool.spawn(move || {
-        let _ = tx.send(f());
-    });
-    rx.await.expect("rayon task panicked or pool dropped")
-}
 
 pub fn binary_insert_by_cmp<T, F>(v: &mut Vec<T>, item: T, mut cmp: F)
 where

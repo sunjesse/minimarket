@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::SystemTime};
 use tokio::sync::mpsc;
@@ -202,53 +201,6 @@ impl Security {
             price: x / (requested as i64),
             kind: Some(kind),
         })
-    }
-}
-
-pub struct Exchange {
-    securities: Arc<DashMap<Symbol, Security>>,
-    broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>,
-}
-
-impl Exchange {
-    pub fn new(broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
-        Self {
-            securities: Arc::new(DashMap::new()),
-            broadcast_tx,
-        }
-    }
-
-    pub fn add_order(&self, to: TimedOrder) -> Option<Order> {
-        let mut entry =
-            self.securities
-                .entry(to.order.sym.clone())
-                .or_insert(Security::new(
-                    to.order.sym.clone(),
-                    self.broadcast_tx.clone(),
-                ));
-
-        let sec = entry.value_mut();
-
-        match to.order.kind {
-            Some(OrderType::MarketBuy) => sec.buy_nowait(to),
-            Some(OrderType::MarketSell) => sec.sell_nowait(to),
-            Some(OrderType::LimitSell) => sec.sell_wait(to),
-            Some(OrderType::LimitBuy) => sec.buy_wait(to),
-            None => None,
-        }
-    }
-
-    pub fn list_all_security_prices(&self) -> SecPriceVec {
-        let v: Vec<SecPrice> = self
-            .securities
-            .iter()
-            .map(|kv| {
-                let k: Symbol = kv.key().clone();
-                let v: Option<i64> = kv.value().current_price();
-                SecPrice::new(k, v)
-            })
-            .collect();
-        SecPriceVec { prices: v }
     }
 }
 
