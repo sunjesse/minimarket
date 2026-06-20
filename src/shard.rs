@@ -62,9 +62,11 @@ impl Shard {
                                     SecPrice::new(sym, sec.current_price()),
                                 );
                             }
-                            if (it & 65535) == 0 { // i % 2^16
+                            if (it & 65535) == 0 {
+                                // i % 2^16
                                 it = 0;
-                                let book: Vec<&Security> = shard.securities.values().collect();
+                                let book: Vec<&Security> =
+                                    shard.securities.values().collect();
                                 let _ = snapshot.save(book, &format!("shard-{i}"));
                             }
                         }

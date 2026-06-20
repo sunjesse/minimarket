@@ -66,7 +66,11 @@ async fn periodic_snapshot(
         let snapshot = snapshot.clone();
         // save state of market prices, but not the bid/asks. that is done inside
         // the impl of Shard
-        match tokio::task::spawn_blocking(move || snapshot.save(sec_prices, "market_prices")).await {
+        match tokio::task::spawn_blocking(move || {
+            snapshot.save(sec_prices, "market_prices")
+        })
+        .await
+        {
             Ok(Ok(())) => {}
             Ok(Err(e)) => eprintln!("snapshot save failed {:?}", e),
             Err(e) => eprintln!("snapshot save panicked {:?}", e),
@@ -115,7 +119,8 @@ async fn main() -> Result<()> {
 
     let global_prices: Arc<DashMap<Symbol, SecPrice>> = Arc::new(DashMap::new());
 
-    let shards = Shard::spawn_shards(nshards, bc_tx, global_prices.clone(), snapshot.clone());
+    let shards =
+        Shard::spawn_shards(nshards, bc_tx, global_prices.clone(), snapshot.clone());
 
     let matcher_completed: Arc<Vec<AtomicU64>> =
         Arc::new((0..nshards).map(|_| AtomicU64::new(0)).collect());
