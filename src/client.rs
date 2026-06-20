@@ -86,7 +86,7 @@ async fn random_spawn_orders(
     tx: mpsc::UnboundedSender<Message>,
     market_prices: Arc<DashMap<Symbol, PriceTime>>,
 ) {
-    const TICKER_CHARSET: &[u8] = b"ABC";
+    const TICKER_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const ACTIONS: &[u8] = b"bBsS";
 
     let mut rng = rand::rng();
