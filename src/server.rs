@@ -31,7 +31,7 @@ async fn sequencer(
 async fn matcher(
     mut rx: mpsc::Receiver<TimedOrder>,
     shards: Vec<smpsc::SyncSender<TimedOrder>>,
-    completed: Arc<AtomicU64>,
+    completed: Arc<Vec<AtomicU64>>,
 ) {
     let n = shards.len();
     while let Some(to) = rx.recv().await {
@@ -39,7 +39,7 @@ async fn matcher(
         if let Err(e) = shards[i].try_send(to) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
         } else {
-            completed.fetch_add(1, Ordering::Relaxed);
+            completed[i].fetch_add(1, Ordering::Relaxed);
         }
     }
 }
@@ -72,18 +72,23 @@ async fn periodic_snapshot(
     }
 }
 
-async fn perf_profile(completed: Arc<AtomicU64>) {
+async fn perf_profile(completed: Arc<Vec<AtomicU64>>) {
     const INTERVAL_SECS: u64 = 2;
     let mut interval = tokio::time::interval(Duration::from_secs(INTERVAL_SECS));
-    let mut prev = 0u64;
+    let n = completed.len();
+    let mut prev = vec![0u64; n];
     loop {
         interval.tick().await;
-        let now = completed.load(Ordering::Relaxed);
-        eprintln!(
-            "[matcher] completed {} orders/s",
-            (now - prev) / INTERVAL_SECS
-        );
-        prev = now;
+        let mut total = 0u64;
+        let mut per_shard = Vec::with_capacity(n);
+        for i in 0..n {
+            let now = completed[i].load(Ordering::Relaxed);
+            let rate = (now - prev[i]) / INTERVAL_SECS;
+            per_shard.push(rate);
+            total += rate;
+            prev[i] = now;
+        }
+        eprintln!("[matcher] total {total} orders/s | per-shard {per_shard:?}");
     }
 }
 
@@ -109,7 +114,8 @@ async fn main() -> Result<()> {
 
     let shards = Shard::spawn_shards(nshards, bc_tx, global_prices.clone());
 
-    let matcher_completed = Arc::new(AtomicU64::new(0));
+    let matcher_completed: Arc<Vec<AtomicU64>> =
+        Arc::new((0..nshards).map(|_| AtomicU64::new(0)).collect());
     let snapshot = Arc::new(SnapshotJob::new());
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
