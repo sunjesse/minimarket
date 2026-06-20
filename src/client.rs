@@ -92,7 +92,7 @@ async fn random_spawn_orders(
     let mut rng = rand::rng();
     let price_noise = Normal::new(0.0, 2.0).unwrap();
     let mut c: usize = 0;
-    const BATCHSIZE: usize = 10_000;
+    const BATCHSIZE: usize = 1 << 16;
 
     let start = std::time::Instant::now();
 
@@ -122,7 +122,7 @@ async fn random_spawn_orders(
         if let Some(order) = parse_order(&cmd) {
             //println!("[client] submitting order {:?}", order);
             c += 1;
-            if c % BATCHSIZE == 0 {
+            if c & (BATCHSIZE - 1) == 0 {
                 c = 0;
                 println!("ts: {:?} - submitted {BATCHSIZE} orders", start.elapsed());
             }
