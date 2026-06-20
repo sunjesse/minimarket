@@ -64,7 +64,9 @@ async fn periodic_snapshot(
         hub.broadcast(prices);
 
         let snapshot = snapshot.clone();
-        match tokio::task::spawn_blocking(move || snapshot.save(sec_prices)).await {
+        // save state of market prices, but not the bid/asks. that is done inside
+        // the impl of Shard
+        match tokio::task::spawn_blocking(move || snapshot.save(sec_prices, "market_prices")).await {
             Ok(Ok(())) => {}
             Ok(Err(e)) => eprintln!("snapshot save failed {:?}", e),
             Err(e) => eprintln!("snapshot save panicked {:?}", e),
@@ -98,10 +100,11 @@ async fn main() -> Result<()> {
         .nth(1)
         .unwrap_or_else(|| "0.0.0.0:8080".to_string());
 
-    let hub: Arc<Hub> = Hub::new();
-
     let listener = TcpListener::bind(&addr).await?;
     println!("listening on: {}", addr);
+
+    let hub: Arc<Hub> = Hub::new();
+    let snapshot = Arc::new(SnapshotJob::new());
 
     let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
     let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
@@ -112,11 +115,10 @@ async fn main() -> Result<()> {
 
     let global_prices: Arc<DashMap<Symbol, SecPrice>> = Arc::new(DashMap::new());
 
-    let shards = Shard::spawn_shards(nshards, bc_tx, global_prices.clone());
+    let shards = Shard::spawn_shards(nshards, bc_tx, global_prices.clone(), snapshot.clone());
 
     let matcher_completed: Arc<Vec<AtomicU64>> =
         Arc::new((0..nshards).map(|_| AtomicU64::new(0)).collect());
-    let snapshot = Arc::new(SnapshotJob::new());
 
     tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
     tokio::spawn(matcher(mat_rx, shards, matcher_completed.clone()));

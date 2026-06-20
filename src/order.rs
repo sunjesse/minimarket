@@ -67,7 +67,7 @@ impl From<&Order> for Bytes {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TimedOrder {
     pub order: Order, // TODO: wrap in Arc later?
     pub dt: SystemTime,

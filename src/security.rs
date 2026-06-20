@@ -7,13 +7,14 @@ use uuid::Uuid;
 use crate::order::{Order, OrderType, Symbol, TimedOrder};
 use crate::utils::binary_insert_by_cmp;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Security {
     _id: Uuid,
     // TODO: move to using BTreeMaps keyed by price levels
     // and a vecdeque per entry. Currently, insertions are O(n) as well!!
     bid: Vec<TimedOrder>, // sorted desc
     ask: Vec<TimedOrder>, // sorted asc
+    #[serde(skip)]
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
     #[allow(unused)]
     sym: Symbol,

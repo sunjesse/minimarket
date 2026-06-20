@@ -36,12 +36,14 @@ impl Shard {
         n: usize,
         bc_tx: mpsc::Sender<Arc<Vec<Order>>>,
         global_prices: Arc<DashMap<Symbol, SecPrice>>,
+        snapshot: Arc<SnapshotJob>,
     ) -> Vec<smpsc::SyncSender<TimedOrder>> {
         (0..n)
             .map(|i| {
                 let (tx, rx) = smpsc::sync_channel::<TimedOrder>(1024);
                 let bc_tx = bc_tx.clone();
                 let global_prices = global_prices.clone();
+                let snapshot = snapshot.clone();
                 ThreadBuilder::new()
                     .name(format!("shard-{i}"))
                     .spawn(move || {
@@ -49,14 +51,21 @@ impl Shard {
                             securities: HashMap::new(),
                             broadcast_tx: bc_tx,
                         };
+                        let mut it: usize = 0;
                         while let Ok(to) = rx.recv() {
                             let sym = to.order.sym.clone();
                             let _ = shard.add_order(to);
+                            it += 1;
                             if let Some(sec) = shard.securities.get(&sym) {
                                 global_prices.insert(
                                     sym.clone(),
                                     SecPrice::new(sym, sec.current_price()),
                                 );
+                            }
+                            if (it & 65535) == 0 { // i % 2^16
+                                it = 0;
+                                let book: Vec<&Security> = shard.securities.values().collect();
+                                let _ = snapshot.save(book, &format!("shard-{i}"));
                             }
                         }
                     })

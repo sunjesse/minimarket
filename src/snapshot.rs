@@ -19,8 +19,8 @@ impl SnapshotJob {
         }
     }
 
-    pub fn save<T: Serialize>(&self, payload: T) -> Result<()> {
-        let fname = self.snapshot_dir.join("state.dat");
+    pub fn save<T: Serialize>(&self, payload: T, name: impl AsRef<str>) -> Result<()> {
+        let fname = self.snapshot_dir.join(format!("{}.dat", name.as_ref()));
 
         fs::create_dir_all(&self.snapshot_dir)?;
 
