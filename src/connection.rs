@@ -21,10 +21,10 @@ pub struct Hub {
 }
 
 impl Hub {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self {
+    pub fn new() -> Self {
+        Self {
             conns: DashMap::new(),
-        })
+        }
     }
 
     pub fn register(self: &Arc<Self>, id: Uuid, out: Conn) {

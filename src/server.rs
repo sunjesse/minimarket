@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     println!("listening on: {}", addr);
 
-    let hub: Arc<Hub> = Hub::new();
+    let hub: Arc<Hub> = Arc::new(Hub::new());
     let snapshot = Arc::new(SnapshotJob::new());
 
     let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
