@@ -10,6 +10,8 @@ use crate::utils::binary_insert_by_cmp;
 #[derive(Debug)]
 pub struct Security {
     _id: Uuid,
+    // TODO: move to using BTreeMaps keyed by price levels
+    // and a vecdeque per entry. Currently, insertions are O(n) as well!!
     bid: Vec<TimedOrder>, // sorted desc
     ask: Vec<TimedOrder>, // sorted asc
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
@@ -59,6 +61,7 @@ impl Security {
         None
     }
 
+    // TODO: fix this!! this is O(n) and called every market order!!
     fn get_q(&self, kind: &OrderType) -> usize {
         let v = if *kind == OrderType::MarketBuy {
             &self.ask

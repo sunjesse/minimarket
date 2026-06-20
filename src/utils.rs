@@ -11,6 +11,8 @@ where
     let pos = match v.binary_search_by(|x| cmp(x, &item)) {
         Ok(i) | Err(i) => i,
     };
+    // TODO: this is O(n)! we will move the bid/asks to
+    // use queues instead.
     v.insert(pos, item);
 }
 
