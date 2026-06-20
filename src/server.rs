@@ -98,51 +98,74 @@ async fn perf_profile(completed: Arc<Vec<AtomicU64>>) {
     }
 }
 
+struct Server {
+    addr: String,
+    nshards: usize,
+}
+
+impl Server {
+    fn new(addr: String, matcher_nshards: usize) -> Self {
+        Self {
+            addr: addr,
+            nshards: matcher_nshards,
+        }
+    }
+
+    async fn start_server(&self) -> Result<()> {
+        let listener = TcpListener::bind(&self.addr).await?;
+        println!("listening on: {}", self.addr);
+
+        let hub: Arc<Hub> = Arc::new(Hub::new());
+        let snapshot = Arc::new(SnapshotJob::new());
+
+        let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
+        let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
+        let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
+
+        println!("num matcher shards: {}", self.nshards);
+
+        let global_prices: Arc<DashMap<Symbol, SecPrice>> = Arc::new(DashMap::new());
+
+        let shards = Shard::spawn_shards(
+            self.nshards,
+            bc_tx,
+            global_prices.clone(),
+            snapshot.clone(),
+        );
+
+        let matcher_completed: Arc<Vec<AtomicU64>> =
+            Arc::new((0..self.nshards).map(|_| AtomicU64::new(0)).collect());
+
+        tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
+        tokio::spawn(matcher(mat_rx, shards, matcher_completed.clone()));
+        tokio::spawn(broadcaster(hub.clone(), bc_rx));
+        tokio::spawn(periodic_snapshot(
+            hub.clone(),
+            snapshot.clone(),
+            global_prices.clone(),
+        ));
+        tokio::spawn(perf_profile(matcher_completed.clone()));
+
+        loop {
+            match listener.accept().await {
+                Ok((stream, addr)) => {
+                    tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+                }
+                Err(e) => {
+                    eprintln!("restarting, due to error {:?}", e)
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let addr: String = env::args()
         .nth(1)
         .unwrap_or_else(|| "0.0.0.0:8080".to_string());
 
-    let listener = TcpListener::bind(&addr).await?;
-    println!("listening on: {}", addr);
-
-    let hub: Arc<Hub> = Arc::new(Hub::new());
-    let snapshot = Arc::new(SnapshotJob::new());
-
-    let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
-    let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
-    let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
-
-    let nshards = (num_cpus::get_physical() - 1).max(1);
-    println!("num matcher shards: {}", nshards);
-
-    let global_prices: Arc<DashMap<Symbol, SecPrice>> = Arc::new(DashMap::new());
-
-    let shards =
-        Shard::spawn_shards(nshards, bc_tx, global_prices.clone(), snapshot.clone());
-
-    let matcher_completed: Arc<Vec<AtomicU64>> =
-        Arc::new((0..nshards).map(|_| AtomicU64::new(0)).collect());
-
-    tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(mat_rx, shards, matcher_completed.clone()));
-    tokio::spawn(broadcaster(hub.clone(), bc_rx));
-    tokio::spawn(periodic_snapshot(
-        hub.clone(),
-        snapshot.clone(),
-        global_prices.clone(),
-    ));
-    tokio::spawn(perf_profile(matcher_completed.clone()));
-
-    loop {
-        match listener.accept().await {
-            Ok((stream, addr)) => {
-                tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
-            }
-            Err(e) => {
-                eprintln!("restarting, due to error {:?}", e)
-            }
-        }
-    }
+    let matcher_nshards: usize = (num_cpus::get_physical() - 1).max(1);
+    let server = Server::new(addr, matcher_nshards);
+    server.start_server().await
 }
