@@ -8,9 +8,4 @@ high level overview:
 currently: 
 - the order matching algorithm is using plain ol' FIFO
 - we allow clients to run the following operations: market buy/sells, limit buy/sells.
-- single process server on my 2022 M2 Macbook Air sustains a throughput of 1.05M orders/s (release build)
-
-next up:
-- try implementing other matching algos: [pro-rata, lead market maker algo, variants of fifo](https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457218479/Supported+Matching+Algorithms)
-- efficiently model implied volatility and other statistics about each security.
-- profiling
+- single process server on my 2022 M2 Macbook Air sustains a throughput of 120k orders/s (dev build) - on a release build, a single client can submit up to 1.1M orders per second, but the matcher is not able to sustain this level of throughput on this current setup with this current code, we have lots of backpressure. it'd be interesting to see how much we can improve!

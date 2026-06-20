@@ -3,7 +3,12 @@ use bytes::Bytes;
 use dashmap::DashMap;
 use std::{
     env,
-    sync::{Arc, mpsc as smpsc},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+        mpsc as smpsc,
+    },
+    time::Duration,
 };
 use tokio::{net::TcpListener, sync::mpsc};
 
@@ -26,12 +31,15 @@ async fn sequencer(
 async fn matcher(
     mut rx: mpsc::Receiver<TimedOrder>,
     shards: Vec<smpsc::SyncSender<TimedOrder>>,
+    completed: Arc<AtomicU64>,
 ) {
     let n = shards.len();
     while let Some(to) = rx.recv().await {
         let i = shard_for(&to.order.sym, n);
         if let Err(e) = shards[i].try_send(to) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
+        } else {
+            completed.fetch_add(1, Ordering::Relaxed);
         }
     }
 }
@@ -39,6 +47,43 @@ async fn matcher(
 async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Arc<Vec<Order>>>) {
     while let Some(x) = rx.recv().await {
         hub.broadcast_to(x.clone());
+    }
+}
+
+async fn periodic_snapshot(
+    hub: Arc<Hub>,
+    snapshot: Arc<SnapshotJob>,
+    global_prices: Arc<DashMap<Symbol, SecPrice>>,
+) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        interval.tick().await;
+        let sec_prices = list_all_security_prices(&global_prices);
+        let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
+        hub.broadcast(prices);
+
+        let snapshot = snapshot.clone();
+        match tokio::task::spawn_blocking(move || snapshot.save(sec_prices)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => eprintln!("snapshot save failed {:?}", e),
+            Err(e) => eprintln!("snapshot save panicked {:?}", e),
+        }
+    }
+}
+
+async fn perf_profile(completed: Arc<AtomicU64>) {
+    const INTERVAL_SECS: u64 = 2;
+    let mut interval = tokio::time::interval(Duration::from_secs(INTERVAL_SECS));
+    let mut prev = 0u64;
+    loop {
+        interval.tick().await;
+        let now = completed.load(Ordering::Relaxed);
+        eprintln!(
+            "[matcher] completed {} orders/s",
+            (now - prev) / INTERVAL_SECS
+        );
+        prev = now;
     }
 }
 
@@ -64,36 +109,18 @@ async fn main() -> Result<()> {
 
     let shards = Shard::spawn_shards(nshards, bc_tx, global_prices.clone());
 
-    tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-    tokio::spawn(matcher(mat_rx, shards));
-    tokio::spawn(broadcaster(hub.clone(), bc_rx));
-
-    // current market prices broadcaster + snapshot task
+    let matcher_completed = Arc::new(AtomicU64::new(0));
     let snapshot = Arc::new(SnapshotJob::new());
-    {
-        let hub = hub.clone();
-        let snapshot = snapshot.clone();
-        tokio::spawn(async move {
-            let mut interval =
-                tokio::time::interval(std::time::Duration::from_secs(10));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-            loop {
-                interval.tick().await;
-                let sec_prices = list_all_security_prices(&global_prices);
-                let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
-                hub.broadcast(prices);
 
-                let snapshot = snapshot.clone();
-                match tokio::task::spawn_blocking(move || snapshot.save(sec_prices))
-                    .await
-                {
-                    Ok(Ok(())) => {}
-                    Ok(Err(e)) => eprintln!("snapshot save failed {:?}", e),
-                    Err(e) => eprintln!("snapshot save panicked {:?}", e),
-                }
-            }
-        });
-    }
+    tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
+    tokio::spawn(matcher(mat_rx, shards, matcher_completed.clone()));
+    tokio::spawn(broadcaster(hub.clone(), bc_rx));
+    tokio::spawn(periodic_snapshot(
+        hub.clone(),
+        snapshot.clone(),
+        global_prices.clone(),
+    ));
+    tokio::spawn(perf_profile(matcher_completed.clone()));
 
     loop {
         match listener.accept().await {
