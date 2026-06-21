@@ -21,7 +21,10 @@ pub struct Security {
 }
 
 impl Security {
-    // NOT THREAD SAFE! Wrap in Arc<Mutex<T>>.
+    // NOTE: Not thread safe - but this is fine
+    // as we pin each security to exactly one thread.
+    // Hence, we don't need to wrap the internal fields
+    // in Arc<Mutex<T>>.
     pub fn new<S: Into<Symbol>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
         Self {
             _id: Uuid::new_v4(),
