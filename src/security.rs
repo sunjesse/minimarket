@@ -44,19 +44,19 @@ impl Security {
     }
 
     pub fn buy_nowait(&mut self, to: TimedOrder) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketBuy, to.order)
+        self.match_order(OrderType::MarketBuy, to)
     }
 
     pub fn sell_wait(&mut self, to: TimedOrder) -> Option<Order> {
-        self.consume_wait(OrderType::LimitSell, to)
+        self.match_order(OrderType::LimitSell, to)
     }
 
     pub fn sell_nowait(&mut self, to: TimedOrder) -> Option<Order> {
-        self.consume_nowait(OrderType::MarketSell, to.order)
+        self.match_order(OrderType::MarketSell, to)
     }
 
     pub fn buy_wait(&mut self, to: TimedOrder) -> Option<Order> {
-        self.consume_wait(OrderType::LimitBuy, to)
+        self.match_order(OrderType::LimitBuy, to)
     }
 
     pub fn spread(&self) -> Option<(i64, i64)> {
@@ -78,28 +78,33 @@ impl Security {
         }
     }
 
-    fn consume_wait(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
-        // CORRECTNESS: assume kind is ony limitbuy or limitsell
-        // we assume this is satisfied by the caller for now.
-        let is_limit_buy: bool = OrderType::LimitBuy == kind;
+    fn match_order(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
+        let is_limit_order: bool =
+            kind == OrderType::LimitBuy || kind == OrderType::LimitSell;
+        let is_buy: bool =
+            kind == OrderType::LimitBuy || kind == OrderType::MarketBuy;
 
-        let mut order: Order = to.order.clone();
-        let requested: usize = order.quantity;
+        if !is_limit_order && to.order.quantity > self.get_q(&kind) {
+            return None;
+        }
 
+        let v: &mut BTreeMap<i64, VecDeque<TimedOrder>> = match kind {
+            OrderType::MarketBuy => &mut self.ask,
+            OrderType::LimitBuy => &mut self.ask,
+            OrderType::MarketSell => &mut self.bid,
+            OrderType::LimitSell => &mut self.bid,
+        };
+
+        let requested_quantity: usize = to.order.quantity;
         let mut total_cost: i64 = 0;
         let mut clients: Vec<Order> = Vec::new();
 
-        let v: &mut BTreeMap<i64, VecDeque<TimedOrder>> = if is_limit_buy {
-            &mut self.ask
-        } else {
-            &mut self.bid
-        };
-
         loop {
-            if order.quantity == 0 {
+            if to.order.quantity == 0 {
                 break;
             }
-            let entry = if is_limit_buy {
+
+            let entry = if is_buy {
                 v.first_entry()
             } else {
                 v.last_entry()
@@ -109,105 +114,26 @@ impl Security {
 
             let price_level: i64 = *level.key();
 
-            // prices don't cross
-            if (is_limit_buy && price_level > order.price)
-                || (!is_limit_buy && price_level < order.price)
-            {
-                break;
-            }
-
-            let dq = level.get_mut();
-
-            while order.quantity > 0 {
-                let Some(cur) = dq.front_mut() else { break };
-                let t = cur.order.quantity.min(order.quantity);
-                total_cost += (t as i64) * cur.order.price;
-                cur.order.quantity -= t;
-                order.quantity -= t;
-                if is_limit_buy {
-                    self.ask_q -= t;
-                } else {
-                    self.bid_q -= t;
-                }
-                clients.push(Order {
-                    id: cur.order.id,
-                    sym: cur.order.sym.clone(),
-                    quantity: t,
-                    price: cur.order.price,
-                    kind: Some(kind),
-                });
-                if cur.order.quantity == 0 {
-                    dq.pop_front();
-                } else {
+            if is_limit_order {
+                if (is_buy && price_level > to.order.price)
+                    || (!is_buy && price_level < to.order.price)
+                {
                     break;
                 }
             }
 
-            // remove empty price level
-            if dq.is_empty() {
-                level.remove();
-            }
-        }
-
-        let _ = self.sig_tx.try_send(Arc::new(clients));
-        if order.quantity > 0 {
-            to.order.quantity = order.quantity;
-            if is_limit_buy {
-                self.ask_q += to.order.quantity
-            } else {
-                self.bid_q += to.order.quantity
-            };
-            v.entry(to.order.price).or_default().push_back(to);
-            return None;
-        }
-
-        order.price = total_cost / (requested - order.quantity) as i64;
-        Some(order)
-    }
-
-    fn consume_nowait(&mut self, kind: OrderType, order: Order) -> Option<Order> {
-        let requested: usize = order.quantity;
-        if requested > self.get_q(&kind) {
-            return None;
-        }
-
-        let is_market_buy: bool = kind == OrderType::MarketBuy;
-
-        let v: &mut BTreeMap<i64, VecDeque<TimedOrder>> = if is_market_buy {
-            &mut self.ask
-        } else {
-            &mut self.bid
-        };
-
-        let mut left: usize = requested;
-        let mut x: i64 = 0;
-
-        let mut clients: Vec<Order> = Vec::new();
-
-        loop {
-            if left == 0 {
-                break;
-            }
-
-            let entry = if is_market_buy {
-                v.first_entry()
-            } else {
-                v.last_entry()
-            };
-            let Some(mut level) = entry else { break };
-
             let dq = level.get_mut();
 
-            while left > 0 {
+            while to.order.quantity > 0 {
                 let Some(cur) = dq.front_mut() else { break };
-                let t: usize = left.min(cur.order.quantity);
+                let t: usize = cur.order.quantity.min(to.order.quantity);
                 if t == 0 {
                     break;
                 }
-                x += cur.order.price * (t as i64);
-                left -= t;
+                total_cost += (t as i64) * cur.order.price;
                 cur.order.quantity -= t;
-                if is_market_buy {
+                to.order.quantity -= t;
+                if is_buy {
                     self.ask_q -= t;
                 } else {
                     self.bid_q -= t;
@@ -215,7 +141,7 @@ impl Security {
 
                 clients.push(Order {
                     id: cur.order.id,
-                    sym: order.sym.clone(),
+                    sym: to.order.sym.clone(),
                     quantity: t,
                     price: cur.order.price,
                     kind: Some(kind),
@@ -227,26 +153,31 @@ impl Security {
                     break;
                 }
             }
-
             if dq.is_empty() {
                 level.remove();
             }
         }
 
-        if left > 0 {
-            return None;
-        }
-
-        // signal to clients;
         let _ = self.sig_tx.try_send(Arc::new(clients));
 
-        Some(Order {
-            id: order.id,
-            sym: order.sym.clone(),
-            quantity: requested,
-            price: x / (requested as i64),
-            kind: Some(kind),
-        })
+        if to.order.quantity > 0 {
+            if !is_limit_order {
+                return None;
+            } else {
+                if is_buy {
+                    self.ask_q += to.order.quantity
+                } else {
+                    self.bid_q += to.order.quantity
+                };
+                v.entry(to.order.price).or_default().push_back(to);
+                return None;
+            }
+        }
+
+        let filled_quantity: usize = requested_quantity - to.order.quantity;
+        to.order.price = total_cost / filled_quantity as i64;
+        to.order.quantity = filled_quantity;
+        Some(to.order)
     }
 }
 
