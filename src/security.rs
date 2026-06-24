@@ -81,8 +81,7 @@ impl Security {
     fn match_order(&mut self, kind: OrderType, mut to: TimedOrder) -> Option<Order> {
         let is_limit_order: bool =
             kind == OrderType::LimitBuy || kind == OrderType::LimitSell;
-        let is_buy: bool =
-            kind == OrderType::LimitBuy || kind == OrderType::MarketBuy;
+        let is_buy: bool = kind == OrderType::LimitBuy || kind == OrderType::MarketBuy;
 
         if !is_limit_order && to.order.quantity > self.get_q(&kind) {
             return None;

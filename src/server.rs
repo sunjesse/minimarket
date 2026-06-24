@@ -10,7 +10,7 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::{net::TcpListener, sync::mpsc, task::JoinSet};
 
 use minimarket::*;
 
@@ -101,6 +101,7 @@ async fn perf_profile(completed: Arc<Vec<AtomicU64>>) {
 struct Server {
     addr: String,
     nshards: usize,
+    task_set: JoinSet<()>,
 }
 
 impl Server {
@@ -108,10 +109,11 @@ impl Server {
         Self {
             addr: addr,
             nshards: matcher_nshards,
+            task_set: JoinSet::new(),
         }
     }
 
-    async fn start_server(&self) -> Result<()> {
+    async fn start_server(&mut self) -> Result<()> {
         let listener = TcpListener::bind(&self.addr).await?;
         println!("listening on: {}", self.addr);
 
@@ -136,23 +138,42 @@ impl Server {
         let matcher_completed: Arc<Vec<AtomicU64>> =
             Arc::new((0..self.nshards).map(|_| AtomicU64::new(0)).collect());
 
-        tokio::spawn(sequencer(hub.clone(), seq_rx, mat_tx));
-        tokio::spawn(matcher(mat_rx, shards, matcher_completed.clone()));
-        tokio::spawn(broadcaster(hub.clone(), bc_rx));
-        tokio::spawn(periodic_snapshot(
+        self.task_set.spawn(sequencer(hub.clone(), seq_rx, mat_tx));
+        self.task_set
+            .spawn(matcher(mat_rx, shards, matcher_completed.clone()));
+        self.task_set.spawn(broadcaster(hub.clone(), bc_rx));
+        self.task_set.spawn(periodic_snapshot(
             hub.clone(),
             snapshot.clone(),
             global_prices.clone(),
         ));
-        tokio::spawn(perf_profile(matcher_completed.clone()));
+        self.task_set.spawn(perf_profile(matcher_completed.clone()));
 
         loop {
-            match listener.accept().await {
-                Ok((stream, addr)) => {
-                    tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+            tokio::select! {
+                // catch error state in the infinite loops
+                Some(res) = self.task_set.join_next() => {
+                    match res {
+                        Ok(()) => eprintln!("[server] a task unexpected terminated"),
+                        Err(e) => eprintln!("[server] a task panicked with {:?}", e),
+                    }
+                    // TODO: maybe rather than shutdown completely, somehow restart
+                    // and pick up the last state before error? may require WALing...
+                    eprintln!("[server] shutting down...");
+                    self.task_set.shutdown().await;
+                    std::process::exit(1);
                 }
-                Err(e) => {
-                    eprintln!("restarting, due to error {:?}", e)
+
+                // accept incoming ws connections and spawn conn_tasks.
+                accept = listener.accept() => {
+                    match accept {
+                        Ok((stream, addr)) => {
+                            tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+                        }
+                        Err(e) => {
+                            eprintln!("restarting, due to error {:?}", e);
+                        }
+                    }
                 }
             }
         }
@@ -166,6 +187,6 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|| "0.0.0.0:8080".to_string());
 
     let matcher_nshards: usize = (num_cpus::get_physical() - 1).max(1);
-    let server = Server::new(addr, matcher_nshards);
+    let mut server = Server::new(addr, matcher_nshards);
     server.start_server().await
 }

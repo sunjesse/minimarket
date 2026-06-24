@@ -3,3 +3,4 @@ snapshots/
 plot/
 flamegraph*
 .DS_Store
+*.swp
