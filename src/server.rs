@@ -4,7 +4,7 @@ use dashmap::DashMap;
 use std::{
     env,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
         mpsc as smpsc,
     },
@@ -52,22 +52,23 @@ async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Arc<Vec<Order>>>) {
 
 async fn periodic_snapshot(
     hub: Arc<Hub>,
-    snapshot: Arc<SnapshotJob>,
+    snapshot: SnapshotJob,
     global_prices: Arc<DashMap<Symbol, SecPrice>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let snapshot: Arc<Mutex<SnapshotJob>> = Arc::new(Mutex::new(snapshot));
     loop {
         interval.tick().await;
         let sec_prices = list_all_security_prices(&global_prices);
         let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
         hub.broadcast(prices);
 
-        let snapshot = snapshot.clone();
         // save state of market prices, but not the bid/asks. that is done inside
         // the impl of Shard
+        let snapshot = snapshot.clone();
         match tokio::task::spawn_blocking(move || {
-            snapshot.save(sec_prices, "market_prices")
+            snapshot.lock().unwrap().save(sec_prices, "market_prices")
         })
         .await
         {
@@ -115,7 +116,7 @@ impl Server {
 
     fn load_global_prices_from_checkpoint(
         &self,
-        snapshot: Arc<SnapshotJob>,
+        snapshot: SnapshotJob,
     ) -> Arc<DashMap<Symbol, SecPrice>> {
         match snapshot.load_last::<SecPriceVec>("market_prices") {
             Ok(Some(snap)) => {
@@ -125,7 +126,7 @@ impl Server {
                     .map(|sp| (sp.sym.clone(), sp))
                     .collect();
 
-                println!("global state - loaded {:?}", map);
+                println!("global state - loaded with # syms {}", map.len());
                 Arc::new(map)
             }
             Ok(None) => {
@@ -147,7 +148,7 @@ impl Server {
         println!("listening on: {}", self.addr);
 
         let hub: Arc<Hub> = Arc::new(Hub::new());
-        let snapshot = Arc::new(SnapshotJob::new());
+        let snapshot = SnapshotJob::new();
 
         let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
         let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
@@ -178,7 +179,7 @@ impl Server {
         self.task_set.spawn(broadcaster(hub.clone(), bc_rx));
         self.task_set.spawn(periodic_snapshot(
             hub.clone(),
-            snapshot.clone(),
+            snapshot,
             global_prices.clone(),
         ));
         self.task_set.spawn(perf_profile(matcher_completed.clone()));

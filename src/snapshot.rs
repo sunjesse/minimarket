@@ -2,34 +2,65 @@ use anyhow::Result;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;
 use std::{
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::{ErrorKind, Read, Write},
     path::PathBuf,
 };
 
-#[derive(Debug)]
+const MAX_FILE_SIZE_BYTES: u64 = 1 << 26; // this is 64 MB
+
+#[derive(Clone, Debug)]
 pub struct SnapshotJob {
     snapshot_dir: PathBuf,
+    version: HashMap<String, usize>,
 }
 
 impl SnapshotJob {
     pub fn new() -> Self {
         Self {
             snapshot_dir: PathBuf::from("./snapshots"),
+            version: HashMap::new(),
         }
     }
 
-    pub fn save<T: Serialize>(&self, payload: T, name: impl AsRef<str>) -> Result<()> {
-        let fname = self.snapshot_dir.join(format!("{}.dat", name.as_ref()));
+    fn construct_fname(&self, name_ref: &str, v: usize) -> PathBuf {
+        let fname = self.snapshot_dir.join(format!("{}-{}.dat", name_ref, v));
+        fname
+    }
 
+    pub fn save<T: Serialize>(
+        &mut self,
+        payload: T,
+        name: impl AsRef<str>,
+    ) -> Result<()> {
         fs::create_dir_all(&self.snapshot_dir)?;
+
+        let name_ref = name.as_ref();
+        // local version count
+        let mut v: usize = *self.version.entry(name_ref.to_string()).or_insert(0);
+        let mut fname = self.construct_fname(name_ref, v);
+        let mut file = OpenOptions::new().create(true).append(true).open(fname)?;
+
+        let fmeta = file.metadata()?;
+
+        if fmeta.len() >= MAX_FILE_SIZE_BYTES {
+            // each thread is pinned to a key in isolation
+            // so we do not need this to be atomic
+            // altho it does internally lock.
+            self.version
+                .entry(name_ref.to_string())
+                .and_modify(|v| *v += 1)
+                .or_insert(0);
+            v += 1;
+            fname = self.construct_fname(name_ref, v);
+            file = OpenOptions::new().create(true).append(true).open(fname)?;
+        }
 
         let encoded: Vec<u8> = bincode::serialize(&payload)?;
 
         // length delimeter
         let len_bytes = (encoded.len() as u64).to_le_bytes();
-
-        let mut file = OpenOptions::new().create(true).append(true).open(fname)?;
 
         file.write_all(&len_bytes)?;
         file.write_all(&encoded)?;

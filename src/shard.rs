@@ -36,7 +36,7 @@ impl Shard {
         n: usize,
         bc_tx: mpsc::Sender<Arc<Vec<Order>>>,
         global_prices: Arc<DashMap<Symbol, SecPrice>>,
-        snapshot: Arc<SnapshotJob>,
+        snapshot: SnapshotJob,
         load_from_checkpoint: bool,
     ) -> Vec<smpsc::SyncSender<TimedOrder>> {
         (0..n)
@@ -44,8 +44,8 @@ impl Shard {
                 let (tx, rx) = smpsc::sync_channel::<TimedOrder>(1024);
                 let bc_tx = bc_tx.clone();
                 let global_prices = global_prices.clone();
-                let snapshot = snapshot.clone();
                 let shard_name: String = format!("shard-{i}");
+                let mut snapshot = snapshot.clone();
                 ThreadBuilder::new()
                     .name(shard_name.clone())
                     .spawn(move || {
