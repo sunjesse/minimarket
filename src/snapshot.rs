@@ -42,17 +42,16 @@ impl SnapshotJob {
         let mut fname = self.construct_fname(name_ref, v);
         let mut file = OpenOptions::new().create(true).append(true).open(fname)?;
 
-        let fmeta = file.metadata()?;
-
-        if fmeta.len() >= MAX_FILE_SIZE_BYTES {
+        // we loop to ensure on restarts, we find the latest version.
+        while file.metadata()?.len() >= MAX_FILE_SIZE_BYTES {
             // each thread is pinned to a key in isolation
             // so we do not need this to be atomic
             // altho it does internally lock.
-            self.version
+            v = *self
+                .version
                 .entry(name_ref.to_string())
                 .and_modify(|v| *v += 1)
                 .or_insert(0);
-            v += 1;
             fname = self.construct_fname(name_ref, v);
             file = OpenOptions::new().create(true).append(true).open(fname)?;
         }
