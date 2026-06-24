@@ -113,7 +113,36 @@ impl Server {
         }
     }
 
-    async fn start_server(&mut self) -> Result<()> {
+    fn load_global_prices_from_checkpoint(
+        &self,
+        snapshot: Arc<SnapshotJob>,
+    ) -> Arc<DashMap<Symbol, SecPrice>> {
+        match snapshot.load_last::<SecPriceVec>("market_prices") {
+            Ok(Some(snap)) => {
+                let map: DashMap<Symbol, SecPrice> = snap
+                    .prices
+                    .into_iter()
+                    .map(|sp| (sp.sym.clone(), sp))
+                    .collect();
+
+                println!("global state - loaded {:?}", map);
+                Arc::new(map)
+            }
+            Ok(None) => {
+                eprintln!("[server] couldn't find global state...");
+                Arc::new(DashMap::new())
+            }
+            Err(e) => {
+                eprintln!(
+                    "[server] error will loading global prices {:?}, starting clean..",
+                    e
+                );
+                Arc::new(DashMap::new())
+            }
+        }
+    }
+
+    async fn start_server(&mut self, load_from_checkpoint: bool) -> Result<()> {
         let listener = TcpListener::bind(&self.addr).await?;
         println!("listening on: {}", self.addr);
 
@@ -126,13 +155,18 @@ impl Server {
 
         println!("num matcher shards: {}", self.nshards);
 
-        let global_prices: Arc<DashMap<Symbol, SecPrice>> = Arc::new(DashMap::new());
+        let global_prices: Arc<DashMap<Symbol, SecPrice>> = if load_from_checkpoint {
+            self.load_global_prices_from_checkpoint(snapshot.clone())
+        } else {
+            Arc::new(DashMap::new())
+        };
 
         let shards = Shard::spawn_shards(
             self.nshards,
             bc_tx,
             global_prices.clone(),
             snapshot.clone(),
+            load_from_checkpoint,
         );
 
         let matcher_completed: Arc<Vec<AtomicU64>> =
@@ -188,5 +222,5 @@ async fn main() -> Result<()> {
 
     let matcher_nshards: usize = (num_cpus::get_physical() - 1).max(1);
     let mut server = Server::new(addr, matcher_nshards);
-    server.start_server().await
+    server.start_server(true).await
 }

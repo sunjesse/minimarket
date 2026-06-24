@@ -37,6 +37,7 @@ impl Shard {
         bc_tx: mpsc::Sender<Arc<Vec<Order>>>,
         global_prices: Arc<DashMap<Symbol, SecPrice>>,
         snapshot: Arc<SnapshotJob>,
+        load_from_checkpoint: bool,
     ) -> Vec<smpsc::SyncSender<TimedOrder>> {
         (0..n)
             .map(|i| {
@@ -44,13 +45,28 @@ impl Shard {
                 let bc_tx = bc_tx.clone();
                 let global_prices = global_prices.clone();
                 let snapshot = snapshot.clone();
+                let shard_name: String = format!("shard-{i}");
                 ThreadBuilder::new()
-                    .name(format!("shard-{i}"))
+                    .name(shard_name.clone())
                     .spawn(move || {
                         let mut shard = Shard {
                             securities: HashMap::new(),
-                            broadcast_tx: bc_tx,
+                            broadcast_tx: bc_tx.clone(),
                         };
+                        if load_from_checkpoint {
+                            match snapshot.load_last::<Vec<SecurityData>>(shard_name) {
+                                Ok(Some(ds)) => {
+                                    for d in ds {
+                                        let sec = Security::from_data(d, bc_tx.clone());
+                                        shard.securities.insert(sec.sym.clone(), sec);
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("[shard-{i}] data load failed {:?}", e);
+                                }
+                                _ => {} // do nothing
+                            }
+                        }
                         let mut it: usize = 0;
                         while let Ok(to) = rx.recv() {
                             let sym = to.order.sym.clone();
@@ -65,8 +81,11 @@ impl Shard {
                             if (it & 65535) == 0 {
                                 // i % 2^16
                                 it = 0;
-                                let book: Vec<&Security> =
-                                    shard.securities.values().collect();
+                                let book: Vec<SecurityDataRef> = shard
+                                    .securities
+                                    .values()
+                                    .map(|v| v.to_data_ref())
+                                    .collect();
                                 let _ = snapshot.save(book, &format!("shard-{i}"));
                             }
                         }

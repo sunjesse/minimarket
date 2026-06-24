@@ -8,7 +8,7 @@ pub mod utils;
 pub use crate::{
     connection::{Hub, conn_task},
     order::{Order, OrderType, Symbol, TimedOrder},
-    security::{SecPrice, SecPriceVec, Security},
+    security::{SecPrice, SecPriceVec, Security, SecurityData, SecurityDataRef},
     shard::{Shard, list_all_security_prices, shard_for},
     snapshot::SnapshotJob,
     utils::{Frame, binary_insert_by_cmp},

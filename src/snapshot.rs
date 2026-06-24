@@ -39,8 +39,11 @@ impl SnapshotJob {
         Ok(())
     }
 
-    pub fn load_last<T: DeserializeOwned>(&self) -> Result<Option<T>> {
-        let fname = self.snapshot_dir.join("state.dat");
+    pub fn load_last<T: DeserializeOwned>(
+        &self,
+        name: impl AsRef<str>,
+    ) -> Result<Option<T>> {
+        let fname = self.snapshot_dir.join(format!("{}.dat", name.as_ref()));
 
         let mut file = match File::open(fname) {
             Ok(f) => f,

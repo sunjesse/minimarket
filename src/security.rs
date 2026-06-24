@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::order::{Order, OrderType, Symbol, TimedOrder};
 use crate::utils::binary_insert_by_cmp;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Security {
     _id: Uuid,
     // TODO: move to using BTreeMaps keyed by price levels
@@ -20,10 +20,9 @@ pub struct Security {
     ask: BTreeMap<i64, VecDeque<TimedOrder>>, // sorted asc
     bid_q: usize,
     ask_q: usize,
-    #[serde(skip)]
     sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
     #[allow(unused)]
-    sym: Symbol,
+    pub sym: Symbol,
 }
 
 impl Security {
@@ -178,6 +177,52 @@ impl Security {
         to.order.quantity = filled_quantity;
         Some(to.order)
     }
+
+    pub fn from_data(
+        data: SecurityData,
+        sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
+    ) -> Self {
+        Self {
+            _id: data._id,
+            bid: data.bid,
+            ask: data.ask,
+            bid_q: data.bid_q,
+            ask_q: data.ask_q,
+            sig_tx,
+            sym: data.sym,
+        }
+    }
+
+    pub fn to_data_ref(&self) -> SecurityDataRef<'_> {
+        SecurityDataRef {
+            _id: self._id,
+            bid: &self.bid,
+            ask: &self.ask,
+            bid_q: self.bid_q,
+            ask_q: self.ask_q,
+            sym: &self.sym,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SecurityData {
+    _id: Uuid,
+    bid: BTreeMap<i64, VecDeque<TimedOrder>>,
+    ask: BTreeMap<i64, VecDeque<TimedOrder>>,
+    bid_q: usize,
+    ask_q: usize,
+    sym: Symbol,
+}
+
+#[derive(Serialize)]
+pub struct SecurityDataRef<'a> {
+    _id: Uuid,
+    bid: &'a BTreeMap<i64, VecDeque<TimedOrder>>,
+    ask: &'a BTreeMap<i64, VecDeque<TimedOrder>>,
+    bid_q: usize,
+    ask_q: usize,
+    sym: &'a Symbol,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
