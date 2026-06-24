@@ -52,17 +52,17 @@ impl SnapshotJob {
 
         loop {
             let mut len_buffer = [0u8; 8];
-
-            match file.read_exact(&mut len_buffer) {
-                Ok(()) => {
-                    let payload_len = u64::from_le_bytes(len_buffer) as usize;
-                    let mut payload_buffer = vec![0u8; payload_len];
-                    file.read_exact(&mut payload_buffer)?;
-                    snapshot = Some(bincode::deserialize(&payload_buffer)?);
+            if let Err(e) = file.read_exact(&mut len_buffer) {
+                if e.kind() == ErrorKind::UnexpectedEof {
+                    break;
                 }
-                Err(ref e) if e.kind() == ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(e.into()),
+                return Err(e.into());
             }
+
+            let payload_len = u64::from_le_bytes(len_buffer) as usize;
+            let mut payload_buffer = vec![0u8; payload_len];
+            file.read_exact(&mut payload_buffer)?;
+            snapshot = Some(bincode::deserialize(&payload_buffer)?);
         }
         Ok(snapshot)
     }
