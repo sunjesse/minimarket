@@ -29,6 +29,25 @@ impl SnapshotJob {
         fname
     }
 
+    fn get_latest_file(&self, fname_prefix: &str) -> Result<PathBuf> {
+        let mut ret = String::new();
+        for e in fs::read_dir(self.snapshot_dir.clone())? {
+            let e = e?;
+            let ep = e.path();
+            if ep.is_file() {
+                if let Some(fname) = ep.file_name().and_then(|x| x.to_str()) {
+                    if fname.starts_with(fname_prefix) && fname > ret.as_str() {
+                        ret = fname.to_string();
+                    }
+                }
+            }
+        }
+        if ret.is_empty() {
+            return Err(anyhow::anyhow!("file not found w/ prefix {}", fname_prefix));
+        }
+        Ok(self.snapshot_dir.join(format!("{}", ret)))
+    }
+
     pub fn save<T: Serialize>(
         &mut self,
         payload: T,
@@ -73,8 +92,11 @@ impl SnapshotJob {
         &self,
         name: impl AsRef<str>,
     ) -> Result<Option<T>> {
-        let fname = self.snapshot_dir.join(format!("{}.dat", name.as_ref()));
+        fs::create_dir_all(&self.snapshot_dir)?;
 
+        let fname = self.get_latest_file(name.as_ref())?;
+
+        eprintln!("[snpashot load] we found {:?}", fname);
         let mut file = match File::open(fname) {
             Ok(f) => f,
             Err(ref e) if e.kind() == ErrorKind::NotFound => return Ok(None),
