@@ -1,9 +1,9 @@
 use std::sync::Mutex;
 
-const MAX_ACTIVE_ORDERS: usize = u16::MAX as usize - 1;
+const MAX_ACTIVE_ORDERS: usize = u16::MAX as usize;
 
 pub struct FreeList {
-    free: Mutex<[u64; 1024]>, // 1024 = MAX_ACTIVE_ORDERS / 64.
+    free: Mutex<[u64; MAX_ACTIVE_ORDERS / 64 + 1]>, // 1024 = MAX_ACTIVE_ORDERS / 64.
 }
 
 impl FreeList {
