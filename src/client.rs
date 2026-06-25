@@ -38,13 +38,7 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
-    Some(Order {
-        id: None,
-        sym: Symbol(sym.into()),
-        quantity,
-        price,
-        kind,
-    })
+    Some(Order::new(None, Symbol(sym.into()), quantity, price, kind))
 }
 
 #[allow(unused)]

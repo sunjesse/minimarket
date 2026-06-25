@@ -52,6 +52,30 @@ pub struct Order {
     pub quantity: usize,
     pub price: i64, // in cents
     pub kind: Option<OrderType>,
+    cancelled: bool,
+}
+
+impl Order {
+    pub fn new(
+        id: Option<Uuid>,
+        sym: Symbol,
+        quantity: usize,
+        price: i64,
+        kind: Option<OrderType>,
+    ) -> Self {
+        Self {
+            id: id,
+            sym: sym,
+            quantity: quantity,
+            price: price,
+            kind: kind,
+            cancelled: false,
+        }
+    }
+
+    pub fn cancel(&mut self) {
+        self.cancelled = true;
+    }
 }
 
 impl From<&Bytes> for Order {

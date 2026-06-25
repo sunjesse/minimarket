@@ -137,13 +137,13 @@ impl Security {
                     self.bid_q -= t;
                 }
 
-                clients.push(Order {
-                    id: cur.order.id,
-                    sym: to.order.sym.clone(),
-                    quantity: t,
-                    price: cur.order.price,
-                    kind: Some(kind),
-                });
+                clients.push(Order::new(
+                    cur.order.id,
+                    to.order.sym.clone(),
+                    t,
+                    cur.order.price,
+                    Some(kind),
+                ));
 
                 if cur.order.quantity == 0 {
                     dq.pop_front();
