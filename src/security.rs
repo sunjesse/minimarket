@@ -138,7 +138,7 @@ impl Security {
                 }
 
                 clients.push(Order::new(
-                    cur.order.id,
+                    cur.order.client_id,
                     to.order.sym.clone(),
                     t,
                     cur.order.price,
