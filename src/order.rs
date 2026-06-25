@@ -47,34 +47,54 @@ pub enum OrderType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
-    pub id: Option<Uuid>, // client id
+    pub client_id: Option<Uuid>, // client id
     pub sym: Symbol,
     pub quantity: usize,
     pub price: i64, // in cents
     pub kind: Option<OrderType>,
+    order_id: u16,
     cancelled: bool,
 }
 
 impl Order {
     pub fn new(
-        id: Option<Uuid>,
+        client_id: Option<Uuid>,
         sym: Symbol,
         quantity: usize,
         price: i64,
         kind: Option<OrderType>,
     ) -> Self {
         Self {
-            id: id,
+            client_id: client_id,
             sym: sym,
             quantity: quantity,
             price: price,
             kind: kind,
+            order_id: 0, // 0 is unavailable
             cancelled: false,
         }
     }
 
     pub fn cancel(&mut self) {
         self.cancelled = true;
+    }
+
+    pub fn get_client_id(&self) -> Option<Uuid> {
+        self.client_id
+    }
+
+    pub fn get_order_id(&self) -> u16 {
+        self.order_id
+    }
+
+    pub fn set_client_id(mut self, client_id: Uuid) -> Self {
+        self.client_id = Some(client_id);
+        self
+    }
+
+    pub fn set_order_id(mut self, order_id: u16) -> Self {
+        self.order_id = order_id;
+        self
     }
 }
 

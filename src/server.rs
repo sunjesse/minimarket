@@ -47,9 +47,14 @@ async fn matcher(
     }
 }
 
-async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Arc<Vec<Order>>>) {
-    while let Some(x) = rx.recv().await {
-        hub.broadcast_to(x.clone());
+async fn broadcaster(hub: Arc<Hub>, mut rx: mpsc::Receiver<Vec<Order>>) {
+    while let Some(orders) = rx.recv().await {
+        for order in orders.iter() {
+            let client_id = order.get_client_id().unwrap();
+            let order_id = order.get_order_id();
+            hub.drop_slot(client_id, order_id);
+        }
+        hub.broadcast_to(orders);
     }
 }
 
@@ -64,7 +69,7 @@ async fn periodic_snapshot(
     loop {
         interval.tick().await;
         let sec_prices = list_all_security_prices(&global_prices);
-        let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
+        let prices = Bytes::from(&Frame::Prices(sec_prices.clone()));
         hub.broadcast(prices);
 
         // save state of market prices, but not the bid/asks. that is done inside
@@ -155,7 +160,7 @@ impl Server {
 
         let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
         let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
-        let (bc_tx, bc_rx) = mpsc::channel::<Arc<Vec<Order>>>(1024);
+        let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
 
         println!("num matcher shards: {}", self.nshards);
 
@@ -171,6 +176,7 @@ impl Server {
             global_prices.clone(),
             snapshot.clone(),
             load_from_checkpoint,
+            hub.clone(),
         );
 
         let matcher_completed: Arc<Vec<AtomicU64>> =

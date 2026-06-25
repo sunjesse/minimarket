@@ -2,7 +2,6 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::Arc,
     time::SystemTime,
 };
 use tokio::sync::mpsc;
@@ -20,7 +19,7 @@ pub struct Security {
     ask: BTreeMap<i64, VecDeque<TimedOrder>>, // sorted asc
     bid_q: usize,
     ask_q: usize,
-    sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
+    sig_tx: mpsc::Sender<Vec<Order>>,
     #[allow(unused)]
     pub sym: Symbol,
 }
@@ -30,7 +29,7 @@ impl Security {
     // as we pin each security to exactly one thread.
     // Hence, we don't need to wrap the internal fields
     // in Arc<Mutex<T>>.
-    pub fn new<S: Into<Symbol>>(sym: S, sig_tx: mpsc::Sender<Arc<Vec<Order>>>) -> Self {
+    pub fn new<S: Into<Symbol>>(sym: S, sig_tx: mpsc::Sender<Vec<Order>>) -> Self {
         Self {
             _id: Uuid::new_v4(),
             bid: BTreeMap::new(),
@@ -137,15 +136,14 @@ impl Security {
                     self.bid_q -= t;
                 }
 
-                clients.push(Order::new(
-                    cur.order.id,
-                    to.order.sym.clone(),
-                    t,
-                    cur.order.price,
-                    Some(kind),
-                ));
-
                 if cur.order.quantity == 0 {
+                    // TODO: we currently only notify if
+                    // order has been completely filled,
+                    // so we can easily deduce which free slots
+                    // are available for a given client.
+                    // we would like to eventually also notify on
+                    // partial fills - while not freeing up a slot.
+                    clients.push(cur.order.clone());
                     dq.pop_front();
                 } else {
                     break;
@@ -156,7 +154,7 @@ impl Security {
             }
         }
 
-        let _ = self.sig_tx.try_send(Arc::new(clients));
+        let _ = self.sig_tx.try_send(clients);
 
         if to.order.quantity > 0 {
             if !is_limit_order {
@@ -178,10 +176,7 @@ impl Security {
         Some(to.order)
     }
 
-    pub fn from_data(
-        data: SecurityData,
-        sig_tx: mpsc::Sender<Arc<Vec<Order>>>,
-    ) -> Self {
+    pub fn from_data(data: SecurityData, sig_tx: mpsc::Sender<Vec<Order>>) -> Self {
         Self {
             _id: data._id,
             bid: data.bid,

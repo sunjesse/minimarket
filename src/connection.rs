@@ -7,49 +7,65 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{Frame, Order};
+use crate::{Frame, FreeList, Order};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
     pub ctrl: mpsc::Sender<Message>,
-    pub data: mpsc::Sender<Arc<Bytes>>,
+    pub data: mpsc::Sender<Bytes>,
 }
 
-#[derive(Debug)]
 pub struct Hub {
     conns: DashMap<Uuid, Conn>,
+    slots_per_conn: DashMap<Uuid, FreeList>,
 }
 
 impl Hub {
     pub fn new() -> Self {
         Self {
             conns: DashMap::new(),
+            slots_per_conn: DashMap::new(),
         }
     }
 
     pub fn register(self: &Arc<Self>, id: Uuid, out: Conn) {
         self.conns.insert(id, out);
+        self.slots_per_conn.insert(id, FreeList::new());
     }
 
     pub fn unregister(&self, id: &Uuid) {
         self.conns.remove(id);
+        self.slots_per_conn.remove(id);
     }
 
-    pub fn broadcast(&self, payload: Arc<Bytes>) {
+    pub fn claim_slot(&self, id: Uuid) -> Option<u16> {
+        if let Some(mut free) = self.slots_per_conn.get_mut(&id) {
+            return free.claim_slot();
+        }
+        None
+    }
+
+    pub fn drop_slot(&self, id: Uuid, slot_idx: u16) {
+        if let Some(mut free) = self.slots_per_conn.get_mut(&id) {
+            free.drop_slot(slot_idx);
+        }
+    }
+
+    pub fn broadcast(&self, payload: Bytes) {
         for conn in self.conns.iter() {
             let _ = conn.data.try_send(payload.clone());
         }
     }
 
-    pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
-        for c in clients.iter() {
-            if let Some(id) = c.id
+    pub fn broadcast_to(&self, orders: Vec<Order>) {
+        for order in orders.iter() {
+            if let Some(id) = order.get_client_id()
                 && let Some(conn) = self.conns.get(&id)
             {
                 // TODO: don't love this c.clone() here. figure out how to fix it.
                 let _ = conn
                     .data
-                    .try_send(Bytes::from(&Frame::Order(c.clone())).into());
+                    .try_send(Bytes::from(&Frame::Order(order.clone())).into());
             }
         }
     }
@@ -75,9 +91,8 @@ pub async fn conn_task(
     println!("socket up: {:?}", addr);
 
     let (tx_ctrl, mut rx_ctrl) = mpsc::channel::<Message>(64);
-    let (tx_data, mut rx_data) = mpsc::channel::<std::sync::Arc<Bytes>>(512);
+    let (tx_data, mut rx_data) = mpsc::channel::<Bytes>(512);
 
-    // this is client id
     let client_id = Uuid::new_v4();
 
     hub.register(
@@ -91,14 +106,14 @@ pub async fn conn_task(
     let (mut sink, mut source) = ws.split();
 
     let mut writer = tokio::spawn(async move {
-        let mut ping = tokio::time::interval(std::time::Duration::from_secs(10));
+        let mut ping = tokio::time::interval(Duration::from_secs(10));
         loop {
             tokio::select! {
                 Some(msg) = rx_ctrl.recv() => {
                     if sink.send(msg).await.is_err() { break; }
                 }
                 Some(buf) = rx_data.recv() => {
-                    if sink.send(Message::Binary((*buf).clone())).await.is_err() { break; }
+                    if sink.send(Message::Binary(buf.into())).await.is_err() { break; }
                 }
                 _ = ping.tick() => {
                     if sink.send(Message::Ping(Bytes::new())).await.is_err() { break; }
@@ -119,12 +134,16 @@ pub async fn conn_task(
                         let Some(Ok(msg)) = frame else { break; };
                         match msg {
                             Message::Binary(b) => {
-                                // TODO: this currently assumes b is valid order, else panics.
-                                let mut ord = Order::from(&b);
-                                ord.id = Some(client_id);
-                                if let Err(e) = seq_tx.send(ord).await {
-                                    eprintln!("[connection] Errored with {}", e);
-                                    break;
+                                if let Some(order_id) = hub.claim_slot(client_id) {
+                                    // TODO: this currently assumes b is valid order, else panics.
+                                    let ord = Order::from(&b)
+                                        .set_client_id(client_id)
+                                        .set_order_id(order_id);
+
+                                    if let Err(e) = seq_tx.send(ord).await {
+                                        eprintln!("[connection] Errored with {}", e);
+                                        break;
+                                    }
                                 }
                             }
                             Message::Pong(_) => {
