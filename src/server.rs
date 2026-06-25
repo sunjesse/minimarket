@@ -69,7 +69,7 @@ async fn periodic_snapshot(
     loop {
         interval.tick().await;
         let sec_prices = list_all_security_prices(&global_prices);
-        let prices = Arc::new(Bytes::from(&Frame::Prices(sec_prices.clone())));
+        let prices = Bytes::from(&Frame::Prices(sec_prices.clone()));
         hub.broadcast(prices);
 
         // save state of market prices, but not the bid/asks. that is done inside

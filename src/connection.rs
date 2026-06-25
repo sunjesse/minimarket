@@ -12,7 +12,7 @@ use crate::{Frame, FreeList, Order};
 #[derive(Clone, Debug)]
 pub struct Conn {
     pub ctrl: mpsc::Sender<Message>,
-    pub data: mpsc::Sender<Arc<Bytes>>,
+    pub data: mpsc::Sender<Bytes>,
 }
 
 pub struct Hub {
@@ -51,7 +51,7 @@ impl Hub {
         }
     }
 
-    pub fn broadcast(&self, payload: Arc<Bytes>) {
+    pub fn broadcast(&self, payload: Bytes) {
         for conn in self.conns.iter() {
             let _ = conn.data.try_send(payload.clone());
         }
@@ -91,7 +91,7 @@ pub async fn conn_task(
     println!("socket up: {:?}", addr);
 
     let (tx_ctrl, mut rx_ctrl) = mpsc::channel::<Message>(64);
-    let (tx_data, mut rx_data) = mpsc::channel::<Arc<Bytes>>(512);
+    let (tx_data, mut rx_data) = mpsc::channel::<Bytes>(512);
 
     let client_id = Uuid::new_v4();
 
@@ -113,7 +113,7 @@ pub async fn conn_task(
                     if sink.send(msg).await.is_err() { break; }
                 }
                 Some(buf) = rx_data.recv() => {
-                    if sink.send(Message::Binary((*buf).clone())).await.is_err() { break; }
+                    if sink.send(Message::Binary(buf.into())).await.is_err() { break; }
                 }
                 _ = ping.tick() => {
                     if sink.send(Message::Ping(Bytes::new())).await.is_err() { break; }
