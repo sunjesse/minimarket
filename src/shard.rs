@@ -11,7 +11,7 @@ use crate::*;
 
 pub struct Shard {
     securities: HashMap<Symbol, Security>,
-    broadcast_tx: mpsc::Sender<Arc<Vec<Order>>>,
+    broadcast_tx: mpsc::Sender<Vec<Order>>,
 }
 
 impl Shard {
@@ -34,7 +34,7 @@ impl Shard {
 
     pub fn spawn_shards(
         n: usize,
-        bc_tx: mpsc::Sender<Arc<Vec<Order>>>,
+        bc_tx: mpsc::Sender<Vec<Order>>,
         global_prices: Arc<DashMap<Symbol, SecPrice>>,
         snapshot: SnapshotJob,
         load_from_checkpoint: bool,

@@ -47,7 +47,6 @@ impl Hub {
 
     pub fn drop_slot(&self, id: Uuid, slot_idx: u16) {
         if let Some(mut free) = self.slots_per_conn.get_mut(&id) {
-            eprintln!("{} dropping {}", id, slot_idx);
             free.drop_slot(slot_idx);
         }
     }
@@ -58,15 +57,15 @@ impl Hub {
         }
     }
 
-    pub fn broadcast_to(&self, clients: Arc<Vec<Order>>) {
-        for c in clients.iter() {
-            if let Some(id) = c.client_id
+    pub fn broadcast_to(&self, orders: Vec<Order>) {
+        for order in orders.iter() {
+            if let Some(id) = order.get_client_id()
                 && let Some(conn) = self.conns.get(&id)
             {
                 // TODO: don't love this c.clone() here. figure out how to fix it.
                 let _ = conn
                     .data
-                    .try_send(Bytes::from(&Frame::Order(c.clone())).into());
+                    .try_send(Bytes::from(&Frame::Order(order.clone())).into());
             }
         }
     }
@@ -137,7 +136,6 @@ pub async fn conn_task(
                             Message::Binary(b) => {
                                 if let Some(order_id) = hub.claim_slot(client_id) {
                                     // TODO: this currently assumes b is valid order, else panics.
-                                    eprintln!("{} claimed {}", client_id, order_id);
                                     let ord = Order::from(&b)
                                         .set_client_id(client_id)
                                         .set_order_id(order_id);

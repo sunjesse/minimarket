@@ -8,8 +8,12 @@ pub struct FreeList {
 
 impl FreeList {
     pub fn new() -> Self {
+        let mut free = [0_u64; 1024];
+        // occupy the first index 0, as 0 is unclaimable
+        // order_id since we make order_id 0 as the default value.
+        free[0] |= 1;
         Self {
-            free: Mutex::new([0_u64; 1024]),
+            free: Mutex::new(free),
         }
     }
 
