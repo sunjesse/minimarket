@@ -38,6 +38,7 @@ impl Shard {
         global_prices: Arc<DashMap<Symbol, SecPrice>>,
         snapshot: SnapshotJob,
         load_from_checkpoint: bool,
+        hub: Arc<Hub>,
     ) -> Vec<smpsc::SyncSender<TimedOrder>> {
         (0..n)
             .map(|i| {
@@ -46,6 +47,7 @@ impl Shard {
                 let global_prices = global_prices.clone();
                 let shard_name: String = format!("shard-{i}");
                 let mut snapshot = snapshot.clone();
+                let hub = hub.clone();
                 ThreadBuilder::new()
                     .name(shard_name.clone())
                     .spawn(move || {
@@ -70,7 +72,15 @@ impl Shard {
                         let mut it: usize = 0;
                         while let Ok(to) = rx.recv() {
                             let sym = to.order.sym.clone();
-                            let _ = shard.add_order(to);
+
+                            let filled = shard.add_order(to);
+                            // free up an order slot for filled order.
+                            if let Some(fo) = filled {
+                                let client_id = fo.get_client_id().unwrap(); // guaranteed to be Some at this point.
+                                let order_id = fo.get_order_id();
+                                hub.drop_slot(client_id, order_id);
+                            }
+
                             it += 1;
                             if let Some(sec) = shard.securities.get(&sym) {
                                 global_prices.insert(

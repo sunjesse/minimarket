@@ -47,6 +47,7 @@ impl Hub {
 
     pub fn drop_slot(&self, id: Uuid, slot_idx: u16) {
         if let Some(mut free) = self.slots_per_conn.get_mut(&id) {
+            eprintln!("{} dropping {}", id, slot_idx);
             free.drop_slot(slot_idx);
         }
     }

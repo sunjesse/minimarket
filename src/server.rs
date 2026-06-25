@@ -171,6 +171,7 @@ impl Server {
             global_prices.clone(),
             snapshot.clone(),
             load_from_checkpoint,
+            hub.clone(),
         );
 
         let matcher_completed: Arc<Vec<AtomicU64>> =

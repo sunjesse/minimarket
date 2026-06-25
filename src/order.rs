@@ -79,6 +79,10 @@ impl Order {
         self.cancelled = true;
     }
 
+    pub fn get_client_id(&self) -> Option<Uuid> {
+        self.client_id
+    }
+
     pub fn get_order_id(&self) -> u16 {
         self.order_id
     }

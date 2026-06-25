@@ -137,15 +137,20 @@ impl Security {
                     self.bid_q -= t;
                 }
 
-                clients.push(Order::new(
-                    cur.order.client_id,
-                    to.order.sym.clone(),
-                    t,
-                    cur.order.price,
-                    Some(kind),
-                ));
-
                 if cur.order.quantity == 0 {
+                    // TODO: we currently only notify if
+                    // order has been completely filled,
+                    // so we can easily deduce which free slots
+                    // are available for a given client.
+                    // we would like to eventually also notify on
+                    // partial fills - while not freeing up a slot.
+                    clients.push(Order::new(
+                        cur.order.client_id,
+                        to.order.sym.clone(),
+                        t,
+                        cur.order.price,
+                        Some(kind),
+                    ));
                     dq.pop_front();
                 } else {
                     break;
