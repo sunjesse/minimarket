@@ -1,14 +1,15 @@
 use std::sync::Mutex;
 
 const MAX_ACTIVE_ORDERS: usize = u16::MAX as usize;
+const N_SLOTS: usize = MAX_ACTIVE_ORDERS / 64 + 1;
 
 pub struct FreeList {
-    free: Mutex<[u64; MAX_ACTIVE_ORDERS / 64 + 1]>,
+    free: Mutex<[u64; N_SLOTS]>,
 }
 
 impl FreeList {
     pub fn new() -> Self {
-        let mut free = [0_u64; 1024];
+        let mut free = [0_u64; N_SLOTS];
         // occupy the first index 0, as 0 is unclaimable
         // order_id since we make order_id 0 as the default value.
         free[0] |= 1;
