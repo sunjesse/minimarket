@@ -143,16 +143,7 @@ impl Security {
                     // are available for a given client.
                     // we would like to eventually also notify on
                     // partial fills - while not freeing up a slot.
-                    clients.push(
-                        Order::new(
-                            cur.order.client_id,
-                            to.order.sym.clone(),
-                            t,
-                            cur.order.price,
-                            Some(kind),
-                        )
-                        .set_order_id(cur.order.get_order_id()),
-                    );
+                    clients.push(cur.order.clone());
                     dq.pop_front();
                 } else {
                     break;
