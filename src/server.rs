@@ -39,6 +39,15 @@ async fn matcher(
         if let Err(e) = shards[i].try_send(to) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
         } else {
+            // TODO: this will eventually overflow and panic...
+            // should we fetch_update? but then we lose some
+            // count if we have:
+            //  -> perf 
+            //  -> some matches complete (#1) 
+            //  -> modulo wrap around
+            //  -> more matches complete (#2)
+            //  -> perf
+            // we lose out on reporting the initial matches in #1...
             completed[i].fetch_add(1, Ordering::Relaxed);
         }
     }
