@@ -7,7 +7,7 @@ use std::{
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::order::{Order, OrderType, Symbol, TimedOrder};
+use crate::order::{Order, OrderCancel, OrderType, Symbol, TimedOrder};
 use crate::utils::binary_insert_by_cmp;
 
 #[derive(Debug)]
@@ -55,6 +55,33 @@ impl Security {
 
     pub fn buy_wait(&mut self, to: TimedOrder) -> Option<Order> {
         self.match_order(OrderType::LimitBuy, to)
+    }
+
+    // TODO: fix up rtype, right now its bool, success = true
+    pub fn cancel_order_by_id(&mut self, client_id: Uuid, order_id: u16) -> bool {
+        // TODO: i really hate this brute force approach rn, fix this later.
+        for (_, v) in self.bid.iter_mut() {
+            for to in v.iter_mut() {
+                if to.order.get_client_id().unwrap() == client_id
+                    && to.order.get_order_id() == order_id
+                {
+                    to.order.cancel();
+                    return true;
+                }
+            }
+        }
+
+        for (_, v) in self.ask.iter_mut() {
+            for to in v.iter_mut() {
+                if to.order.get_client_id().unwrap() == client_id
+                    && to.order.get_order_id() == order_id
+                {
+                    to.order.cancel();
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn spread(&self) -> Option<(i64, i64)> {

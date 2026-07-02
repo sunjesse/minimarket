@@ -145,6 +145,7 @@ pub async fn conn_task(
                         let Some(Ok(msg)) = frame else { break; };
                         match msg {
                             Message::Binary(b) => {
+                                eprintln!("I HAVE RECEIVED {:?}", b);
                                 if let Some(order_id) = hub.claim_slot(client_id) {
                                     // TODO: this currently assumes b is valid order, else panics.
                                     let ord = Order::from(&b)

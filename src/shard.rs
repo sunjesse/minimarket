@@ -32,6 +32,15 @@ impl Shard {
         }
     }
 
+    pub fn cancel_order(&mut self, oc: OrderCancel) {
+        // return result?
+        if let Some(sec) = self.securities.get_mut(&oc.sym) {
+            sec.cancel_order_by_id(oc.client_id, oc.order_id);
+        } else {
+            eprintln!("symbol doesn't exist {:?}", oc.sym);
+        }
+    }
+
     pub fn spawn_shards(
         n: usize,
         bc_tx: mpsc::Sender<Vec<Order>>,
