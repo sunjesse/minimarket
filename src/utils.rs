@@ -2,7 +2,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{Order, SecPriceVec};
+use crate::{Order, OrderReceived, SecPriceVec};
 
 pub fn binary_insert_by_cmp<T, F>(v: &mut Vec<T>, item: T, mut cmp: F)
 where
@@ -19,6 +19,7 @@ where
 #[derive(Serialize, Deserialize)]
 pub enum Frame {
     Order(Order),
+    OrderReceived(OrderReceived),
     Prices(SecPriceVec),
 }
 

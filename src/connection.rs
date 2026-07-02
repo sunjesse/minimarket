@@ -77,6 +77,17 @@ impl Hub {
             Err(())
         }
     }
+
+    pub async fn send_data(&self, id: &Uuid, bytes: Bytes) -> Result<(), ()> {
+        if let Some(conn) = self.conns.get(id) {
+            conn.data
+                .send(bytes)
+                .await
+                .map_err(|e| eprintln!("[hub] send_data error {:?}", e))
+        } else {
+            Err(())
+        }
+    }
 }
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -140,9 +151,18 @@ pub async fn conn_task(
                                         .set_client_id(client_id)
                                         .set_order_id(order_id);
 
-                                    if let Err(e) = seq_tx.send(ord).await {
+                                    if let Err(e) = seq_tx.send(ord.clone()).await {
                                         eprintln!("[connection] Errored with {}", e);
                                         break;
+                                    } else {
+                                    // the order is successfully sent to the sequencer
+                                    // so we can sig back to the client the order_id.
+                                        let _ = hub.send_data(
+                                            &client_id,
+                                            Bytes::from(
+                                                &Frame::OrderReceived(ord.get_slim_view()
+                                            ))
+                                        ).await;
                                     }
                                 }
                             }

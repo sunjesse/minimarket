@@ -157,7 +157,8 @@ async fn main() {
             match message {
                 Ok(Message::Binary(data)) => match bincode::deserialize::<Frame>(&data)
                 {
-                    Ok(Frame::Order(_)) => {} //println!("received {:?}", o),
+                    Ok(Frame::Order(_o)) => {} //eprintln!("received {:?}", o) }
+                    Ok(Frame::OrderReceived(_or)) => {} //eprintln!("order received {:?}", or) }
                     Ok(Frame::Prices(spv)) => {
                         for sp in spv.prices.iter() {
                             if let Some(p) = sp.price {
@@ -166,10 +167,16 @@ async fn main() {
                             }
                         }
                     }
-                    Err(_) => {}
+                    Err(e) => {
+                        eprintln!("decoding failed {:?}", e);
+                    }
                 },
-                Err(_) => {}
-                _ => {}
+                Err(e) => {
+                    eprintln!("decodnign failed, outer {:?}", e);
+                }
+                _ => {
+                    eprintln!("no matches {:?}", message);
+                }
             }
         })
     };

@@ -46,6 +46,15 @@ pub enum OrderType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderReceived {
+    sym: Symbol,
+    quantity: usize,
+    price: i64,
+    kind: OrderType,
+    order_id: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
     pub client_id: Option<Uuid>, // client id
     pub sym: Symbol,
@@ -79,6 +88,10 @@ impl Order {
         self.cancelled = true;
     }
 
+    pub fn is_valid(&self) -> bool {
+        !self.cancelled
+    }
+
     pub fn get_client_id(&self) -> Option<Uuid> {
         self.client_id
     }
@@ -95,6 +108,16 @@ impl Order {
     pub fn set_order_id(mut self, order_id: u16) -> Self {
         self.order_id = order_id;
         self
+    }
+
+    pub fn get_slim_view(&self) -> OrderReceived {
+        OrderReceived {
+            sym: self.sym.clone(),
+            quantity: self.quantity,
+            price: self.price,
+            kind: self.kind.unwrap(),
+            order_id: self.order_id,
+        }
     }
 }
 

@@ -123,30 +123,37 @@ impl Security {
 
             while to.order.quantity > 0 {
                 let Some(cur) = dq.front_mut() else { break };
-                let t: usize = cur.order.quantity.min(to.order.quantity);
-                if t == 0 {
-                    break;
-                }
-                total_cost += (t as i64) * cur.order.price;
-                cur.order.quantity -= t;
-                to.order.quantity -= t;
-                if is_buy {
-                    self.ask_q -= t;
-                } else {
-                    self.bid_q -= t;
-                }
 
-                if cur.order.quantity == 0 {
-                    // TODO: we currently only notify if
-                    // order has been completely filled,
-                    // so we can easily deduce which free slots
-                    // are available for a given client.
-                    // we would like to eventually also notify on
-                    // partial fills - while not freeing up a slot.
-                    clients.push(cur.order.clone());
-                    dq.pop_front();
+                if cur.order.is_valid() {
+                    let t: usize = cur.order.quantity.min(to.order.quantity);
+                    if t == 0 {
+                        break;
+                    }
+                    total_cost += (t as i64) * cur.order.price;
+                    cur.order.quantity -= t;
+                    to.order.quantity -= t;
+                    if is_buy {
+                        self.ask_q -= t;
+                    } else {
+                        self.bid_q -= t;
+                    }
+
+                    if cur.order.quantity == 0 {
+                        // TODO: we currently only notify if
+                        // order has been completely filled,
+                        // so we can easily deduce which free slots
+                        // are available for a given client.
+                        // we would like to eventually also notify on
+                        // partial fills - while not freeing up a slot.
+                        clients.push(cur.order.clone());
+                        dq.pop_front();
+                    } else {
+                        break;
+                    }
                 } else {
-                    break;
+                    // since the order at the front of the queue is cancelled,
+                    // we'll need to pop it off.
+                    dq.pop_front();
                 }
             }
             if dq.is_empty() {
