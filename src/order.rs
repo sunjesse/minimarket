@@ -54,7 +54,7 @@ pub struct OrderReceived {
     order_id: u16,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderCancel {
     pub client_id: Uuid,
     pub sym: Symbol,
@@ -154,4 +154,10 @@ impl TimedOrder {
             dt: SystemTime::now(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ShardedOrder {
+    Add(TimedOrder),
+    Cancel(OrderCancel),
 }

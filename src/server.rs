@@ -30,19 +30,35 @@ async fn sequencer(
 
 async fn matcher(
     mut rx: mpsc::Receiver<TimedOrder>,
-    shards: Vec<smpsc::SyncSender<TimedOrder>>,
+    shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
     completed: Arc<Vec<AtomicU64>>,
 ) {
     let n = shards.len();
     while let Some(to) = rx.recv().await {
         let i = shard_for(&to.order.sym, n);
-        if let Err(e) = shards[i].try_send(to) {
+        if let Err(e) = shards[i].try_send(ShardedOrder::Add(to)) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
         } else {
             // TODO: this wraps to 0 on overflow
             // update the perf reporting to handle
             // completed[i] < prev[i] due to the wrapping.
             completed[i].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+async fn canceler(
+    mut rx: mpsc::Receiver<OrderCancel>,
+    hub: Arc<Hub>,
+    shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
+) {
+    let n = shards.len();
+    while let Some(oc) = rx.recv().await {
+        // first get the correct shard, and then
+        // cancel. after, free up the slot.
+        let i = shard_for(&oc.sym, n);
+        if let Err(e) = shards[i].try_send(ShardedOrder::Cancel(oc)) {
+            eprintln!("[canceler] shard {} errored with {:}", i, e);
         }
     }
 }
@@ -170,21 +186,21 @@ impl Server {
             Arc::new(DashMap::new())
         };
 
-        let shards = Shard::spawn_shards(
+        let shards = Arc::new(Shard::spawn_shards(
             self.nshards,
             bc_tx,
             global_prices.clone(),
             snapshot.clone(),
             load_from_checkpoint,
             hub.clone(),
-        );
+        ));
 
         let matcher_completed: Arc<Vec<AtomicU64>> =
             Arc::new((0..self.nshards).map(|_| AtomicU64::new(0)).collect());
 
         self.task_set.spawn(sequencer(hub.clone(), seq_rx, mat_tx));
         self.task_set
-            .spawn(matcher(mat_rx, shards, matcher_completed.clone()));
+            .spawn(matcher(mat_rx, shards.clone(), matcher_completed.clone()));
         self.task_set.spawn(broadcaster(hub.clone(), bc_rx));
         self.task_set.spawn(periodic_snapshot(
             hub.clone(),

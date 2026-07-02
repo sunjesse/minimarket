@@ -7,7 +7,7 @@ use std::{
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::order::{Order, OrderCancel, OrderType, Symbol, TimedOrder};
+use crate::order::{Order, OrderType, Symbol, TimedOrder};
 use crate::utils::binary_insert_by_cmp;
 
 #[derive(Debug)]
