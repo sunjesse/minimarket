@@ -10,6 +10,12 @@ service:
   port: 8000
   nodePort: 30080
 
+resources:
+  requests:
+    cpu: "8"
+  limits:
+    cpu: "8"
+
 containerPort: 8000
 
 persistence:

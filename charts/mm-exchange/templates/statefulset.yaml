@@ -16,12 +16,17 @@ spec:
         app: {{ .Release.Name }}-server
     spec:
       containers:
-        - name: rust-server
+        - name: server
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           workingDir: /
           ports:
             - containerPort: {{ .Values.containerPort }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
           volumeMounts:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
