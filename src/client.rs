@@ -18,15 +18,12 @@ fn parse_order(input: &str) -> Option<ClientCommands> {
     let input = input.trim();
 
     // expect like "bTICKER@100@250" or "sTICKER@50@120"
-    if input.len() < 4 {
-        return None;
-    }
-
     let (side, rest) = input.split_at(1);
 
     // a cancel order, of the form X<order_id>, i.e. X123
     if side == "X" {
         let order_id: u16 = rest.parse::<u16>().ok()?;
+        eprintln!("cancelling {}", order_id);
         return Some(ClientCommands::Cancel(OrderCancel {
             client_id: Uuid::default(), // default filler, it's set server side.
             sym: "AAA".into(),          // TODO: filler, look up in map later
@@ -132,7 +129,6 @@ async fn random_spawn_orders(
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
         if let Some(client_cmds) = parse_order(&cmd) {
-            //println!("[client] submitting order {:?}", order);
             c += 1;
             if c & (BATCHSIZE - 1) == 0 {
                 c = 0;

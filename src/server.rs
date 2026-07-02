@@ -49,7 +49,6 @@ async fn matcher(
 
 async fn canceler(
     mut rx: mpsc::Receiver<OrderCancel>,
-    hub: Arc<Hub>,
     shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
 ) {
     let n = shards.len();
@@ -177,6 +176,7 @@ impl Server {
         let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
         let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
         let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
+        let (cancel_tx, cancel_rx) = mpsc::channel::<OrderCancel>(1024);
 
         println!("num matcher shards: {}", self.nshards);
 
@@ -201,6 +201,7 @@ impl Server {
         self.task_set.spawn(sequencer(hub.clone(), seq_rx, mat_tx));
         self.task_set
             .spawn(matcher(mat_rx, shards.clone(), matcher_completed.clone()));
+        self.task_set.spawn(canceler(cancel_rx, shards.clone()));
         self.task_set.spawn(broadcaster(hub.clone(), bc_rx));
         self.task_set.spawn(periodic_snapshot(
             hub.clone(),
@@ -228,7 +229,8 @@ impl Server {
                 accept = listener.accept() => {
                     match accept {
                         Ok((stream, addr)) => {
-                            tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+                            tokio::spawn(
+                                conn_task(hub.clone(), seq_tx.clone(), cancel_tx.clone(), stream, addr));
                         }
                         Err(e) => {
                             eprintln!("restarting, due to error {:?}", e);

@@ -35,8 +35,7 @@ impl Shard {
     pub fn cancel_order(&mut self, oc: OrderCancel) -> bool {
         // return result?
         if let Some(sec) = self.securities.get_mut(&oc.sym) {
-            sec.cancel_order_by_id(oc.client_id, oc.order_id);
-            true
+            sec.cancel_order_by_id(oc.client_id, oc.order_id)
         } else {
             eprintln!("symbol doesn't exist {:?}", oc.sym);
             false
@@ -94,6 +93,10 @@ impl Shard {
                                     if shard.cancel_order(oc) {
                                         // drop the order slot if successfully cancelled.
                                         hub.drop_slot(client_id, order_id);
+                                        eprintln!(
+                                            "[shard] cancelled {} {}",
+                                            client_id, order_id
+                                        );
                                     }
                                     continue;
                                 }
