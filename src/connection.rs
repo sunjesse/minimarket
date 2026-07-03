@@ -94,7 +94,7 @@ const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn conn_task(
     hub: Arc<Hub>,
-    seq_tx: mpsc::Sender<Order>,
+    mat_tx: mpsc::Sender<Order>,
     cancel_tx: mpsc::Sender<OrderCancel>,
     stream: TcpStream,
     addr: SocketAddr,
@@ -163,7 +163,7 @@ pub async fn conn_task(
                                         .set_client_id(client_id)
                                         .set_order_id(order_id);
 
-                                    if let Err(e) = seq_tx.send(ord.clone()).await {
+                                    if let Err(e) = mat_tx.send(ord.clone()).await {
                                         eprintln!("[connection] Errored with {}", e);
                                         break;
                                     } else {

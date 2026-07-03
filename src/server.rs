@@ -14,27 +14,14 @@ use tokio::{net::TcpListener, sync::mpsc, task::JoinSet};
 
 use minimarket::*;
 
-async fn sequencer(
-    _hub: Arc<Hub>,
-    mut rx: mpsc::Receiver<Order>,
-    tx: mpsc::Sender<TimedOrder>, // -> matcher
-) {
-    while let Some(ord) = rx.recv().await {
-        let to = TimedOrder::new(ord);
-        if tx.send(to).await.is_err() {
-            eprintln!("[sequencer] matcher channel closed, shutting down...");
-            break;
-        }
-    }
-}
-
 async fn matcher(
-    mut rx: mpsc::Receiver<TimedOrder>,
+    mut rx: mpsc::Receiver<Order>,
     shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
     completed: Arc<Vec<AtomicU64>>,
 ) {
     let n = shards.len();
-    while let Some(to) = rx.recv().await {
+    while let Some(o) = rx.recv().await {
+        let to = TimedOrder::new(o);
         let i = shard_for(&to.order.sym, n);
         if let Err(e) = shards[i].try_send(ShardedOrder::Add(to)) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
@@ -173,8 +160,7 @@ impl Server {
         let hub: Arc<Hub> = Arc::new(Hub::new());
         let snapshot = SnapshotJob::new();
 
-        let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
-        let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
+        let (mat_tx, mat_rx) = mpsc::channel::<Order>(1024);
         let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
         let (cancel_tx, cancel_rx) = mpsc::channel::<OrderCancel>(1024);
 
@@ -198,7 +184,6 @@ impl Server {
         let matcher_completed: Arc<Vec<AtomicU64>> =
             Arc::new((0..self.nshards).map(|_| AtomicU64::new(0)).collect());
 
-        self.task_set.spawn(sequencer(hub.clone(), seq_rx, mat_tx));
         self.task_set
             .spawn(matcher(mat_rx, shards.clone(), matcher_completed.clone()));
         self.task_set.spawn(canceler(cancel_rx, shards.clone()));
@@ -230,7 +215,7 @@ impl Server {
                     match accept {
                         Ok((stream, addr)) => {
                             tokio::spawn(
-                                conn_task(hub.clone(), seq_tx.clone(), cancel_tx.clone(), stream, addr));
+                                conn_task(hub.clone(), mat_tx.clone(), cancel_tx.clone(), stream, addr));
                         }
                         Err(e) => {
                             eprintln!("restarting, due to error {:?}", e);
