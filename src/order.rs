@@ -55,8 +55,15 @@ pub struct OrderReceived {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderCancel {
+    pub client_id: Uuid,
+    pub sym: Symbol,
+    pub order_id: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Order {
-    pub client_id: Option<Uuid>, // client id
+    client_id: Option<Uuid>, // client id
     pub sym: Symbol,
     pub quantity: usize,
     pub price: i64, // in cents
@@ -147,4 +154,10 @@ impl TimedOrder {
             dt: SystemTime::now(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum ShardedOrder {
+    Add(TimedOrder),
+    Cancel(OrderCancel),
 }

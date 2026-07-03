@@ -8,20 +8,29 @@ use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use uuid::Uuid;
 
-use minimarket::{Frame, Order, OrderType, Symbol};
+use minimarket::{ClientCommands, Frame, Order, OrderCancel, OrderType, Symbol};
 
 type PriceTime = (i64, SystemTime);
 
-fn parse_order(input: &str) -> Option<Order> {
+fn parse_order(input: &str) -> Option<ClientCommands> {
     let input = input.trim();
 
     // expect like "bTICKER@100@250" or "sTICKER@50@120"
-    if input.len() < 4 {
-        return None;
+    let (side, rest) = input.split_at(1);
+
+    // a cancel order, of the form X<order_id>, i.e. X123
+    if side == "X" {
+        let order_id: u16 = rest.parse::<u16>().ok()?;
+        eprintln!("cancelling {}", order_id);
+        return Some(ClientCommands::Cancel(OrderCancel {
+            client_id: Uuid::default(), // default filler, it's set server side.
+            sym: "AAA".into(),          // TODO: filler, look up in map later
+            order_id: order_id,
+        }));
     }
 
-    let (side, rest) = input.split_at(1);
     let mut parts = rest.split('@');
     let sym: &str = parts.next()?;
     let quantity_str: &str = parts.next()?;
@@ -38,7 +47,13 @@ fn parse_order(input: &str) -> Option<Order> {
         _ => None,
     };
 
-    Some(Order::new(None, Symbol(sym.into()), quantity, price, kind))
+    Some(ClientCommands::New(Order::new(
+        None,
+        Symbol(sym.into()),
+        quantity,
+        price,
+        kind,
+    )))
 }
 
 #[allow(unused)]
@@ -68,8 +83,8 @@ async fn read_stdin_orders(tx: mpsc::UnboundedSender<Message>) {
 
         let s = String::from_utf8_lossy(&buf[..n]);
         for line in s.lines() {
-            if let Some(order) = parse_order(line) {
-                let bytes = Bytes::from(&order);
+            if let Some(client_cmds) = parse_order(line) {
+                let bytes = Bytes::from(&client_cmds);
                 tx.send(Message::Binary(bytes)).unwrap();
             }
         }
@@ -113,14 +128,13 @@ async fn random_spawn_orders(
 
         let cmd: String = format!("{}{}@{}@{}", action, ticker, quantity, price);
 
-        if let Some(order) = parse_order(&cmd) {
-            //println!("[client] submitting order {:?}", order);
+        if let Some(client_cmds) = parse_order(&cmd) {
             c += 1;
             if c & (BATCHSIZE - 1) == 0 {
                 c = 0;
                 println!("ts: {:?} - submitted {BATCHSIZE} orders", start.elapsed());
             }
-            let bytes = Bytes::from(&order);
+            let bytes = Bytes::from(&client_cmds);
             tx.send(Message::Binary(bytes)).unwrap();
         }
     }

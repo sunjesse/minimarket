@@ -2,7 +2,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-use crate::{Order, OrderReceived, SecPriceVec};
+use crate::{Order, OrderCancel, OrderReceived, SecPriceVec};
 
 pub fn binary_insert_by_cmp<T, F>(v: &mut Vec<T>, item: T, mut cmp: F)
 where
@@ -32,5 +32,23 @@ impl From<&Frame> for Bytes {
 impl From<&Bytes> for Frame {
     fn from(b: &Bytes) -> Self {
         bincode::deserialize(b).expect("d")
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum ClientCommands {
+    New(Order),
+    Cancel(OrderCancel),
+}
+
+impl From<&ClientCommands> for Bytes {
+    fn from(cc: &ClientCommands) -> Self {
+        Bytes::from(bincode::serialize(cc).expect("panik"))
+    }
+}
+
+impl From<&Bytes> for ClientCommands {
+    fn from(b: &Bytes) -> Self {
+        bincode::deserialize(b).expect("panik")
     }
 }

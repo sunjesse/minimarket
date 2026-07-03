@@ -32,6 +32,16 @@ impl Shard {
         }
     }
 
+    pub fn cancel_order(&mut self, oc: OrderCancel) -> bool {
+        // return result?
+        if let Some(sec) = self.securities.get_mut(&oc.sym) {
+            sec.cancel_order_by_id(oc.client_id, oc.order_id)
+        } else {
+            eprintln!("symbol doesn't exist {:?}", oc.sym);
+            false
+        }
+    }
+
     pub fn spawn_shards(
         n: usize,
         bc_tx: mpsc::Sender<Vec<Order>>,
@@ -39,10 +49,10 @@ impl Shard {
         snapshot: SnapshotJob,
         load_from_checkpoint: bool,
         hub: Arc<Hub>,
-    ) -> Vec<smpsc::SyncSender<TimedOrder>> {
+    ) -> Vec<smpsc::SyncSender<ShardedOrder>> {
         (0..n)
             .map(|i| {
-                let (tx, rx) = smpsc::sync_channel::<TimedOrder>(1024);
+                let (tx, rx) = smpsc::sync_channel::<ShardedOrder>(1024);
                 let bc_tx = bc_tx.clone();
                 let global_prices = global_prices.clone();
                 let shard_name: String = format!("shard-{i}");
@@ -70,7 +80,34 @@ impl Shard {
                             }
                         }
                         let mut it: usize = 0;
-                        while let Ok(to) = rx.recv() {
+                        while let Ok(so) = rx.recv() {
+                            // if the ShardedOrder is a cancel order, just cancel the order.
+                            // otherwise, we resolve this match to the TimedOrder and proceed with
+                            // the matching algo.
+                            let to = match so {
+                                ShardedOrder::Cancel(oc) => {
+                                    let client_id = oc.client_id;
+                                    let order_id = oc.order_id;
+                                    // TODO: right now we only check bool for success,
+                                    // move to checking result?
+                                    if shard.cancel_order(oc) {
+                                        // drop the order slot if successfully cancelled.
+                                        hub.drop_slot(client_id, order_id);
+                                        eprintln!(
+                                            "[shard] cancelled {} {}",
+                                            client_id, order_id
+                                        );
+                                    } else {
+                                        eprintln!(
+                                            "[shard] order {} not cancelled",
+                                            order_id
+                                        );
+                                    }
+                                    continue;
+                                }
+                                ShardedOrder::Add(to) => to,
+                            };
+
                             let sym = to.order.sym.clone();
 
                             let filled = shard.add_order(to);

@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::{Frame, FreeList, Order};
+use crate::{ClientCommands, Frame, FreeList, Order, OrderCancel};
 
 #[derive(Clone, Debug)]
 pub struct Conn {
@@ -95,6 +95,7 @@ const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 pub async fn conn_task(
     hub: Arc<Hub>,
     seq_tx: mpsc::Sender<Order>,
+    cancel_tx: mpsc::Sender<OrderCancel>,
     stream: TcpStream,
     addr: SocketAddr,
 ) -> Result<()> {
@@ -145,9 +146,20 @@ pub async fn conn_task(
                         let Some(Ok(msg)) = frame else { break; };
                         match msg {
                             Message::Binary(b) => {
+                                let mut ord = match ClientCommands::from(&b) {
+                                    ClientCommands::Cancel(mut oc) => {
+                                        oc.client_id = client_id;
+                                        if let Err(e) = cancel_tx.send(oc).await {
+                                            eprintln!("cancel send errored {:?}", e);
+                                            break;
+                                        }
+                                        continue;
+                                    }
+                                    ClientCommands::New(o) => o,
+                                };
+
                                 if let Some(order_id) = hub.claim_slot(client_id) {
-                                    // TODO: this currently assumes b is valid order, else panics.
-                                    let ord = Order::from(&b)
+                                    ord = ord
                                         .set_client_id(client_id)
                                         .set_order_id(order_id);
 

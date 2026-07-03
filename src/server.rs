@@ -30,19 +30,34 @@ async fn sequencer(
 
 async fn matcher(
     mut rx: mpsc::Receiver<TimedOrder>,
-    shards: Vec<smpsc::SyncSender<TimedOrder>>,
+    shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
     completed: Arc<Vec<AtomicU64>>,
 ) {
     let n = shards.len();
     while let Some(to) = rx.recv().await {
         let i = shard_for(&to.order.sym, n);
-        if let Err(e) = shards[i].try_send(to) {
+        if let Err(e) = shards[i].try_send(ShardedOrder::Add(to)) {
             eprintln!("[matcher] shard {} errored with {:}", i, e);
         } else {
             // TODO: this wraps to 0 on overflow
             // update the perf reporting to handle
             // completed[i] < prev[i] due to the wrapping.
             completed[i].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+async fn canceler(
+    mut rx: mpsc::Receiver<OrderCancel>,
+    shards: Arc<Vec<smpsc::SyncSender<ShardedOrder>>>,
+) {
+    let n = shards.len();
+    while let Some(oc) = rx.recv().await {
+        // first get the correct shard, and then
+        // cancel. after, free up the slot.
+        let i = shard_for(&oc.sym, n);
+        if let Err(e) = shards[i].try_send(ShardedOrder::Cancel(oc)) {
+            eprintln!("[canceler] shard {} errored with {:}", i, e);
         }
     }
 }
@@ -161,6 +176,7 @@ impl Server {
         let (seq_tx, seq_rx) = mpsc::channel::<Order>(1024);
         let (mat_tx, mat_rx) = mpsc::channel::<TimedOrder>(1024);
         let (bc_tx, bc_rx) = mpsc::channel::<Vec<Order>>(1024);
+        let (cancel_tx, cancel_rx) = mpsc::channel::<OrderCancel>(1024);
 
         println!("num matcher shards: {}", self.nshards);
 
@@ -170,21 +186,22 @@ impl Server {
             Arc::new(DashMap::new())
         };
 
-        let shards = Shard::spawn_shards(
+        let shards = Arc::new(Shard::spawn_shards(
             self.nshards,
             bc_tx,
             global_prices.clone(),
             snapshot.clone(),
             load_from_checkpoint,
             hub.clone(),
-        );
+        ));
 
         let matcher_completed: Arc<Vec<AtomicU64>> =
             Arc::new((0..self.nshards).map(|_| AtomicU64::new(0)).collect());
 
         self.task_set.spawn(sequencer(hub.clone(), seq_rx, mat_tx));
         self.task_set
-            .spawn(matcher(mat_rx, shards, matcher_completed.clone()));
+            .spawn(matcher(mat_rx, shards.clone(), matcher_completed.clone()));
+        self.task_set.spawn(canceler(cancel_rx, shards.clone()));
         self.task_set.spawn(broadcaster(hub.clone(), bc_rx));
         self.task_set.spawn(periodic_snapshot(
             hub.clone(),
@@ -212,7 +229,8 @@ impl Server {
                 accept = listener.accept() => {
                     match accept {
                         Ok((stream, addr)) => {
-                            tokio::spawn(conn_task(hub.clone(), seq_tx.clone(), stream, addr));
+                            tokio::spawn(
+                                conn_task(hub.clone(), seq_tx.clone(), cancel_tx.clone(), stream, addr));
                         }
                         Err(e) => {
                             eprintln!("restarting, due to error {:?}", e);
