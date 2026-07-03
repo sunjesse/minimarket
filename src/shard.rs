@@ -97,6 +97,11 @@ impl Shard {
                                             "[shard] cancelled {} {}",
                                             client_id, order_id
                                         );
+                                    } else {
+                                        eprintln!(
+                                            "[shard] order {} not cancelled",
+                                            order_id
+                                        );
                                     }
                                     continue;
                                 }

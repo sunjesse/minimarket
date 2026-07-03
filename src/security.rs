@@ -65,6 +65,10 @@ impl Security {
                 if to.order.get_client_id().unwrap() == client_id
                     && to.order.get_order_id() == order_id
                 {
+                    // order already canceled.
+                    if !to.order.is_valid() {
+                        return false;
+                    }
                     to.order.cancel();
                     return true;
                 }
@@ -76,6 +80,9 @@ impl Security {
                 if to.order.get_client_id().unwrap() == client_id
                     && to.order.get_order_id() == order_id
                 {
+                    if !to.order.is_valid() {
+                        return false;
+                    }
                     to.order.cancel();
                     return true;
                 }
