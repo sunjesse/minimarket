@@ -15,7 +15,8 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use uuid::Uuid;
 
 use minimarket::{
-    ClientCommands, Frame, MAX_ACTIVE_ORDERS, Order, OrderCancel, OrderReceived, OrderType, Symbol,
+    ClientCommands, Frame, MAX_ACTIVE_ORDERS, Order, OrderCancel, OrderReceived,
+    OrderType, Symbol,
 };
 
 type PriceTime = (i64, SystemTime);
@@ -32,19 +33,22 @@ fn parse_order(
     // a cancel order, of the form X<order_id>, i.e. X123
     if side == "X" {
         let order_id: u16 = rest.parse::<u16>().ok()?;
-        let mut index = order_index.lock().unwrap();
-        let (plevel, kind, sym): (i64, OrderType, Symbol) =
-            index.get_info_about_order(order_id);
-        index.remove_order(order_id); // TODO: this should really be called once server sigs back cancel complete. but leave it here so we can free up slots temporarily.
-        drop(index);
-        eprintln!("cancelling {} {:?} {:?}", plevel, kind, &sym);
-        return Some(ClientCommands::Cancel(OrderCancel {
-            client_id: Uuid::default(), // default filler, it's set server side.
-            sym: sym,
-            price_level: plevel,
-            kind: kind,
-            order_id: order_id,
-        }));
+        if let Ok(mut index) = order_index.lock() {
+            if let Some((plevel, kind, sym)) = index.get_info_about_order(order_id) {
+                eprintln!("cancelling {} {:?} {:?}", plevel, kind, &sym);
+                index.remove_order(order_id); // TODO: this should really be called once server sigs back cancel complete. but leave it here so we can free up slots temporarily.
+                drop(index);
+                return Some(ClientCommands::Cancel(OrderCancel {
+                    client_id: Uuid::default(), // default filler, it's set server side.
+                    sym: sym,
+                    price_level: plevel,
+                    kind: kind,
+                    order_id: order_id,
+                }));
+            } else {
+                return None;
+            }
+        }
     }
 
     let mut parts = rest.split('@');
@@ -177,11 +181,19 @@ impl OrderIndex {
         }
     }
 
-    fn get_info_about_order(&self, order_id: u16) -> (i64, OrderType, Symbol) {
+    fn get_info_about_order(&self, order_id: u16) -> Option<(i64, OrderType, Symbol)> {
         let idx: usize = order_id as usize;
+        if !self.valid[idx] {
+            return None;
+        }
         let kind = self.map_int_to_order_type(self.id_to_type[idx]);
-        let sym: Symbol = self.id_to_sym[idx].clone().unwrap(); // let it panic here...
-        (self.id_to_plevel[idx], kind, sym)
+        if kind.is_none() {
+            return None;
+        }
+        let sym: Symbol = self.id_to_sym[idx].clone().unwrap(); // let it panic here, as sym should
+        // always exist by the time we get
+        // here.
+        Some((self.id_to_plevel[idx], kind.unwrap(), sym))
     }
 
     fn index_order(&mut self, or: OrderReceived) {
@@ -200,15 +212,13 @@ impl OrderIndex {
         self.valid[idx] = false;
     }
 
-    fn map_int_to_order_type(&self, v: u8) -> OrderType {
+    fn map_int_to_order_type(&self, v: u8) -> Option<OrderType> {
         match v {
-            1 => OrderType::MarketBuy,
-            2 => OrderType::MarketSell,
-            3 => OrderType::LimitBuy,
-            4 => OrderType::LimitSell,
-            _ => {
-                todo!()
-            }
+            1 => Some(OrderType::MarketBuy),
+            2 => Some(OrderType::MarketSell),
+            3 => Some(OrderType::LimitBuy),
+            4 => Some(OrderType::LimitSell),
+            _ => None,
         }
     }
 

@@ -1,5 +1,5 @@
-use std::sync::Mutex;
 use crate::MAX_ACTIVE_ORDERS;
+use std::sync::Mutex;
 
 const N_CHUNKS: usize = MAX_ACTIVE_ORDERS / 64 + 1;
 
