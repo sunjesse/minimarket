@@ -190,9 +190,7 @@ impl OrderIndex {
         if kind.is_none() {
             return None;
         }
-        let sym: Symbol = self.id_to_sym[idx].clone().unwrap(); // let it panic here, as sym should
-        // always exist by the time we get
-        // here.
+        let sym: Symbol = self.id_to_sym[idx].clone().unwrap(); // let it panic here, as sym should always exist by the time we get here.
         Some((self.id_to_plevel[idx], kind.unwrap(), sym))
     }
 
