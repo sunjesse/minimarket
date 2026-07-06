@@ -23,3 +23,8 @@ persistence:
   size: 1Gi
   mountPath: /state
   storageClass: local-path
+
+# TODO: metallb should be deployed separately down the road.
+metallb:
+  enabled: true
+  ipRange: "192.168.40.220-192.168.40.240"
