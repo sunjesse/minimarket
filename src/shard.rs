@@ -35,7 +35,7 @@ impl Shard {
     pub fn cancel_order(&mut self, oc: OrderCancel) -> bool {
         // return result?
         if let Some(sec) = self.securities.get_mut(&oc.sym) {
-            sec.cancel_order_by_id(oc.client_id, oc.order_id)
+            sec.cancel_order_by_id(oc.client_id, oc.order_id, oc.price_level, oc.kind)
         } else {
             eprintln!("symbol doesn't exist {:?}", oc.sym);
             false

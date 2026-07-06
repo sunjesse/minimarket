@@ -47,17 +47,19 @@ pub enum OrderType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderReceived {
-    sym: Symbol,
-    quantity: usize,
-    price: i64,
-    kind: OrderType,
-    order_id: u16,
+    pub sym: Symbol,
+    pub quantity: usize,
+    pub price: i64,
+    pub kind: OrderType,
+    pub order_id: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderCancel {
     pub client_id: Uuid,
     pub sym: Symbol,
+    pub price_level: i64,
+    pub kind: OrderType,
     pub order_id: u16,
 }
 
