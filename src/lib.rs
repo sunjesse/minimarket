@@ -1,4 +1,5 @@
 pub mod connection;
+pub mod consts;
 pub mod freelist;
 pub mod order;
 pub mod security;
@@ -8,6 +9,7 @@ pub mod utils;
 
 pub use crate::{
     connection::{Hub, conn_task},
+    consts::MAX_ACTIVE_ORDERS,
     freelist::FreeList,
     order::{
         Order, OrderCancel, OrderReceived, OrderType, ShardedOrder, Symbol, TimedOrder,

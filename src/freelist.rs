@@ -1,6 +1,6 @@
+use crate::MAX_ACTIVE_ORDERS;
 use std::sync::Mutex;
 
-const MAX_ACTIVE_ORDERS: usize = u16::MAX as usize;
 const N_CHUNKS: usize = MAX_ACTIVE_ORDERS / 64 + 1;
 
 pub struct FreeList {

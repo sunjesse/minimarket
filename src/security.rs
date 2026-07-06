@@ -58,28 +58,26 @@ impl Security {
     }
 
     // TODO: fix up rtype, right now its bool, success = true
-    pub fn cancel_order_by_id(&mut self, client_id: Uuid, order_id: u16) -> bool {
-        // TODO: i really hate this brute force approach rn, fix this later.
-        for (_, v) in self.bid.iter_mut() {
-            for to in v.iter_mut() {
+    pub fn cancel_order_by_id(
+        &mut self,
+        client_id: Uuid,
+        order_id: u16,
+        price_level: i64,
+        kind: OrderType,
+    ) -> bool {
+        let ptr = match kind {
+            OrderType::LimitBuy => &mut self.ask,
+            OrderType::LimitSell => &mut self.bid,
+            OrderType::MarketBuy => &mut self.ask,
+            OrderType::MarketSell => &mut self.bid,
+        };
+
+        if let Some(deq) = ptr.get_mut(&price_level) {
+            for to in deq.iter_mut() {
                 if to.order.get_client_id().unwrap() == client_id
                     && to.order.get_order_id() == order_id
                 {
                     // order already canceled.
-                    if !to.order.is_valid() {
-                        return false;
-                    }
-                    to.order.cancel();
-                    return true;
-                }
-            }
-        }
-
-        for (_, v) in self.ask.iter_mut() {
-            for to in v.iter_mut() {
-                if to.order.get_client_id().unwrap() == client_id
-                    && to.order.get_order_id() == order_id
-                {
                     if !to.order.is_valid() {
                         return false;
                     }
