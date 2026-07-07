@@ -37,7 +37,6 @@ fn parse_order(
             if let Some((plevel, kind, sym)) = index.get_info_about_order(order_id) {
                 eprintln!("cancelling {} {:?} {:?}", plevel, kind, &sym);
                 index.remove_order(order_id); // TODO: this should really be called once server sigs back cancel complete. but leave it here so we can free up slots temporarily.
-                drop(index);
                 return Some(ClientCommands::Cancel(OrderCancel {
                     client_id: Uuid::default(), // default filler, it's set server side.
                     sym: sym,
