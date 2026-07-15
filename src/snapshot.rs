@@ -63,7 +63,7 @@ impl SnapshotJob {
 
         // we loop to ensure on restarts, we find the latest version.
         while file.metadata()?.len() >= MAX_FILE_SIZE_BYTES {
-            // each thread is pinned to a key in isolation
+            // each key is pinned to a thread
             // so we do not need this to be atomic
             // altho it does internally lock.
             v = *self
